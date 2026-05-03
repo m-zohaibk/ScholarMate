@@ -1,0 +1,189 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * ScholarMate AI Security Rules
+     * 
+     * Core Philosophy:
+     * This ruleset enforces a strict path-based ownership model for personal data and a role/visibility-based
+     * model for shared academic content. It prioritizes Authorization Independence by organizing user data 
+     * under their respective UID paths, ensuring that most security checks are local and performant.
+     * 
+     * Data Structure:
+     * - User-Centric Data: /userProfiles/{userId}/... (includes documents, notes, schedules, reminders, and private quizzes).
+     * - Shared Content: /publishedQuizzes/{quizId} (top-level collection for collaborative/public teaching materials).
+     * 
+     * Key Security Decisions:
+     * - Authorization Independence: User profiles and their subcollections are secured by checking the {userId}
+     *   variable in the path against the authenticated user's UID.
+     * - Denormalization: Published quizzes contain fields like `creatorId`, `isPublic`, and `sharedWithStudents` 
+     *   directly on the document to allow for efficient queries and atomic authorization checks.
+     * - Structural Segregation: Personal quizzes are kept separate from published ones to prevent accidental 
+     *   exposure of draft materials.
+     * - Relational Integrity: On creation of user-scoped documents, the rules enforce that internal 
+     *   relational fields (like uploaderId or studentId) match the authenticated user's UID.
+     */
+
+    // --- Helper Functions ---
+
+    /** Checks if the user is authenticated with any provider. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** Checks if the authenticated user's UID matches the provided userId. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** Checks for existing ownership and document presence for updates and deletes. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    /** Checks if the user has access to a published quiz based on visibility or explicit sharing. */
+    function canAccessPublishedQuiz(quizData) {
+      return quizData.isPublic == true || 
+             quizData.creatorId == request.auth.uid || 
+             (quizData.sharedWithStudents != null && quizData.sharedWithStudents[request.auth.uid] == true);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for the root User Profile document.
+     * @path /userProfiles/{userId}
+     * @allow Authenticated user can (create) their own profile or (get/list/update) if they are the owner.
+     * @deny Any user attempting to access or modify a profile that does not belong to them.
+     * @principle Self-creation and ownership-based access control.
+     */
+    match /userProfiles/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Uploaded study materials or teacher-provided syllabus content.
+       * @path /userProfiles/{userId}/documents/{documentId}
+       * @allow Owner of the profile can manage their own uploaded documents.
+       * @deny Unauthenticated users or other students accessing private source materials.
+       * @principle Path-based ownership ensures privacy of source content.
+       */
+      match /documents/{documentId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.uploaderId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.uploaderId == resource.data.uploaderId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description AI-generated notes based on user documents.
+       * @path /userProfiles/{userId}/notes/{noteId}
+       * @allow User can access and manage AI-generated notes intended for them.
+       * @deny Accessing another user's generated study notes.
+       * @principle Restricts access to a user's own data tree.
+       */
+      match /notes/{noteId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.studentId == resource.data.studentId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Personalized AI study schedules and daily challenges.
+       * @path /userProfiles/{userId}/studySchedules/{scheduleId}
+       * @allow User can view and manage their own personalized schedule.
+       * @deny Modification of study plans by unauthorized users.
+       * @principle Ownership-based authorization for personalized content.
+       */
+      match /studySchedules/{scheduleId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.studentId == resource.data.studentId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Student reminders for tasks and schedules.
+       * @path /userProfiles/{userId}/reminders/{reminderId}
+       * @allow User can manage their own notification triggers.
+       * @deny Viewing or dismissing reminders belonging to other users.
+       * @principle Enforces document ownership for private notifications.
+       */
+      match /reminders/{reminderId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.studentId == resource.data.studentId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Private quizzes created by or for a specific user.
+       * @path /userProfiles/{userId}/personalQuizzes/{quizId}
+       * @allow User can manage their private quizzes.
+       * @deny Accessing private draft quizzes of other users.
+       * @principle Structural segregation of private vs public quiz content.
+       */
+      match /personalQuizzes/{quizId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.creatorId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.creatorId == resource.data.creatorId;
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description Questions for a private quiz.
+         * @path /userProfiles/{userId}/personalQuizzes/{quizId}/questions/{questionId}
+         * @allow Inherited ownership access from the parent quiz path.
+         * @deny Direct access by non-owners.
+         */
+        match /questions/{questionId} {
+          allow get, list: if isOwner(userId);
+          allow create, update, delete: if isOwner(userId);
+        }
+      }
+
+      /**
+       * @description Student history of quiz attempts.
+       * @path /userProfiles/{userId}/quizAttempts/{quizAttemptId}
+       * @allow User can view their own score history and submissions.
+       * @deny Students viewing each other's grades/attempts.
+       * @principle Privacy of academic performance data.
+       */
+      match /quizAttempts/{quizAttemptId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.studentId == resource.data.studentId;
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+
+    /**
+     * @description Quizzes published by teachers for student consumption.
+     * @path /publishedQuizzes/{quizId}
+     * @allow (get/list) if quiz is public or shared. (create/update/delete) only if user is the creator.
+     * @deny Unauthorized users modifying shared content or viewing restricted quizzes.
+     * @principle Denormalization for Authorization (creatorId, isPublic, sharedWithStudents).
+     */
+    match /publishedQuizzes/{quizId} {
+      allow get, list: if isSignedIn() && canAccessPublishedQuiz(resource.data);
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.creatorId == request.auth.uid && request.resource.data.creatorId == resource.data.creatorId;
+      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+
+      /**
+       * @description Questions for a published quiz.
+       * @path /publishedQuizzes/{quizId}/questions/{questionId}
+       * @allow Access granted if the user has access to the parent published quiz.
+       * @deny Accessing questions for restricted or private quizzes.
+       * @principle Subcollection access via parent resource lookup.
+       */
+      match /questions/{questionId} {
+        allow get, list: if isSignedIn() && canAccessPublishedQuiz(get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data);
+        allow create, update, delete: if isSignedIn() && get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data.creatorId == request.auth.uid;
+      }
+    }
+  }
+}
