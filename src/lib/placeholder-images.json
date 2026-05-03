@@ -1,3 +1,22 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-bg",
+      "description": "Abstract academic background with books and tech patterns",
+      "imageUrl": "https://picsum.photos/seed/scholarmate/1200/800",
+      "imageHint": "academic study"
+    },
+    {
+      "id": "teacher-dashboard",
+      "description": "Teacher dashboard interface",
+      "imageUrl": "https://picsum.photos/seed/teacher/800/600",
+      "imageHint": "teaching classroom"
+    },
+    {
+      "id": "student-dashboard",
+      "description": "Student study session with laptop",
+      "imageUrl": "https://picsum.photos/seed/student/800/600",
+      "imageHint": "student learning"
+    }
+  ]
 }
