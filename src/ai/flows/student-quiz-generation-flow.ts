@@ -1,10 +1,6 @@
 'use server';
 /**
  * @fileOverview An AI agent that generates customized quizzes for students based on their study materials.
- *
- * - generateStudentQuiz - A function that handles the student quiz generation process.
- * - StudentQuizGenerationInput - The input type for the generateStudentQuiz function.
- * - StudentQuizGenerationOutput - The return type for the generateStudentQuiz function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -14,7 +10,7 @@ const StudentQuizGenerationInputSchema = z.object({
   studyMaterialDataUri: z
     .string()
     .describe(
-      "A data URI of the student's study material (PDF, PPTX, DOCX) that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "A data URI of the student's study material (PDF, PPTX, DOCX, or Image) that must include a MIME type and use Base64 encoding."
     ),
   questionTypes: z
     .array(z.enum(['MCQ', 'Short Answer', 'Conceptual/Scenario-based']))
@@ -31,9 +27,9 @@ export type StudentQuizGenerationInput = z.infer<typeof StudentQuizGenerationInp
 const StudentQuizQuestionSchema = z.object({
   type: z.enum(['MCQ', 'Short Answer', 'Conceptual/Scenario-based']).describe('The type of the question.'),
   questionText: z.string().describe('The text of the quiz question.'),
-  options: z.array(z.string()).optional().describe('An array of options for multiple choice questions. Only present for MCQ type.'),
-  correctAnswer: z.string().describe('The correct answer to the question.'),
-  explanation: z.string().optional().describe('An optional explanation for the correct answer.'),
+  options: z.array(z.string()).optional().describe('An array of 4 options for MCQ. Required for MCQ.'),
+  correctAnswer: z.string().describe('The correct answer. For MCQ, this must match one of the options exactly.'),
+  explanation: z.string().optional().describe('An explanation of why the answer is correct.'),
 });
 
 const StudentQuizGenerationOutputSchema = z.object({
@@ -52,34 +48,34 @@ const generateStudentQuizPrompt = ai.definePrompt({
   name: 'generateStudentQuizPrompt',
   input: {schema: StudentQuizGenerationInputSchema},
   output: {schema: StudentQuizGenerationOutputSchema},
-  prompt: `You are an AI assistant specialized in creating educational quizzes.
-Your task is to generate a quiz based on the provided study material, tailored to the student's preferences.
+  prompt: `You are an expert educator and OCR specialist. 
+Your task is to generate a high-quality quiz by analyzing the provided study material. 
 
-The quiz must contain:
-- Question Types: {{{questionTypes}}}
-- Difficulty Level: {{{difficulty}}}
-- Number of Questions: {{{numberOfQuestions}}}
+VISION CAPABILITIES: 
+- Accurately read printed text and handwritten notes.
+- Interpret diagrams, charts, and illustrations.
+- Perform high-fidelity OCR to extract information from images.
+
+The quiz must adhere to:
+- Types: {{{questionTypes}}}
+- Difficulty: {{{difficulty}}}
+- Question Count: {{{numberOfQuestions}}}
 
 {{#if focusTopics}}
-Focus on these topics/keywords: {{{focusTopics}}}
+Focus on: {{{focusTopics}}}
 {{else}}
-If no specific focus topics are provided, cover general content from the study material.
+Cover the most important concepts throughout the material.
 {{/if}}
 
 Study Material: {{media url=studyMaterialDataUri}}
 
-Instructions for generating questions:
-1.  **General**: Ensure the quiz adheres to the specified question types, difficulty, and number of questions. Provide a clear correct answer and an explanation for each question.
-2.  **Multiple Choice Questions (MCQ)**:
-    *   Provide exactly 4 options.
-    *   The 'correctAnswer' for MCQ should be the full text of the correct option, not its index.
-3.  **Short Answer Questions**:
-    *   The 'correctAnswer' should be a concise and accurate answer, usually a few words or a short sentence.
-4.  **Conceptual/Scenario-based Questions**:
-    *   The 'correctAnswer' should be a detailed and comprehensive answer, explaining the concept or analyzing the scenario.
+Instructions:
+1. MCQ: Provide 4 plausible options. The 'correctAnswer' must be the exact text of the correct option.
+2. Short Answer: The 'correctAnswer' should be concise (1-2 sentences max).
+3. Conceptual: Questions should test understanding, not just recall.
+4. ALWAYS provide an explanation that helps the student learn from their mistakes.
 
-Generate the output in a JSON object strictly adhering to the following schema:
-`,
+Respond strictly in JSON format.`,
 });
 
 const studentQuizGenerationFlow = ai.defineFlow(

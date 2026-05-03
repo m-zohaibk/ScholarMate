@@ -46,17 +46,16 @@ const prompt = ai.definePrompt({
   name: 'studentStructuredNotesPrompt',
   input: { schema: StudentStructuredNotesInputSchema },
   output: { schema: StudentStructuredNotesOutputSchema },
-  prompt: `You are an AI assistant specialized in generating structured study notes.
-Your task is to take the provided study material and organize it into clear, concise, and structured notes.
+  prompt: `You are an AI assistant specialized in OCR and academic transcription. 
+Your primary task is to accurately transcribe and organize content from the provided study material, which may include printed text, handwritten notes, or diagrams.
+
+CRITICAL CAPABILITY: You must perform high-precision OCR. If the material is handwritten, carefully decipher the writing. If it contains images or charts, describe the core information they convey.
 
 Instructions:
-1. Create a main title for the notes.
-2. Provide an overall summary of the study material.
-3. Organize the content into logical sections with clear headings and subheadings.
-4. Under each subheading, list key ideas and important points as bullet points.
-
-Output Format:
-Respond ONLY with a JSON object matching the following schema. Ensure all fields are present and correctly formatted.
+1. Create a professional, clear main title.
+2. Provide a concise executive summary.
+3. Organize content into a hierarchical structure using logical sections and headings.
+4. Extract key facts, definitions, and concepts into bullet points.
 
 Study Material: {{media url=studyMaterialDataUri}}
 
@@ -66,9 +65,9 @@ Focus Keywords/Topics: {{#each keywordsToFocus}}{{{this}}}{{#unless @last}}, {{/
 
 Detail Level: {{{detailLevel}}}
 {{#if (eq detailLevel "summary")}}
-Prioritize brevity and high-level concepts.
+Prioritize brevity, high-level themes, and core conclusions.
 {{else}}
-Include comprehensive details, covering all significant aspects mentioned in the material.
+Include comprehensive details, covering all significant points, definitions, and examples mentioned in the material.
 {{/if}}
 `,
 });
