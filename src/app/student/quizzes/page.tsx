@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { generateStudentQuiz, type StudentQuizGenerationOutput } from '@/ai/flows/student-quiz-generation-flow';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import { Sparkles, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, ChevronRight, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
@@ -18,16 +18,33 @@ export default function StudentQuizCenter() {
   const [numQuestions, setNumQuestions] = useState(5);
   const [quiz, setQuiz] = useState<StudentQuizGenerationOutput | null>(null);
   
+  const [fileData, setFileData] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Quiz taking state
   const [activeQuestion, setActiveQuestion] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Helper to handle simple text to "mock data URI" for the flow which expects study material
-  // In a real app, we'd use actual uploaded file base64
-  const mockSyllabusBase64 = "data:text/plain;base64,VGhpcyBpcyBhIG1vY2sgc3R1ZHkgbWF0ZXJpYWwgY29udGVudCBmb3IgdGhlIHF1aXogZ2VuZXJhdGlvbiBmbG93Lg==";
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFileData(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleGenerate = async () => {
+    if (!fileData) {
+      toast({ title: "Document Required", description: "Please upload a study material file." });
+      return;
+    }
+
     setLoading(true);
     setQuiz(null);
     setIsSubmitted(false);
@@ -36,15 +53,15 @@ export default function StudentQuizCenter() {
 
     try {
       const result = await generateStudentQuiz({
-        studyMaterialDataUri: mockSyllabusBase64, // Using mock for demonstration
+        studyMaterialDataUri: fileData,
         difficulty,
         numberOfQuestions: numQuestions,
         questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'],
       });
       setQuiz(result);
-      toast({ title: "Quiz Ready!", description: "AI has prepared your assessment." });
+      toast({ title: "Quiz Ready!", description: "AI has analyzed your document and prepared your assessment." });
     } catch (error) {
-      toast({ title: "Error", description: "Failed to generate quiz. Check your connection." });
+      toast({ title: "Error", description: "Failed to generate quiz. Check your connection or file type." });
     } finally {
       setLoading(false);
     }
@@ -70,7 +87,7 @@ export default function StudentQuizCenter() {
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="font-headline text-3xl font-bold">Quiz Center</h1>
-        <p className="text-muted-foreground">Test your knowledge and track your mastery of subjects.</p>
+        <p className="text-muted-foreground">Test your knowledge using real-world study documents.</p>
       </div>
 
       {!quiz ? (
@@ -81,9 +98,28 @@ export default function StudentQuizCenter() {
                 <BookOpen className="w-10 h-10 text-primary" />
               </div>
               <h3 className="font-headline text-xl font-bold">New Session</h3>
-              <p className="text-sm text-muted-foreground mt-2">Generate a quiz based on your recent study history.</p>
+              <p className="text-sm text-muted-foreground mt-2">Upload a PDF or Image to generate a custom quiz.</p>
             </div>
             <div className="md:w-2/3 p-8 space-y-6 bg-white">
+              <div className="space-y-2">
+                <Label>Source Document</Label>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange}
+                  accept="application/pdf,image/*"
+                />
+                <Button 
+                  variant="outline" 
+                  className="w-full h-12 border-dashed border-2 rounded-xl"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {fileName || "Click to upload study material"}
+                </Button>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Difficulty</Label>
@@ -113,18 +149,13 @@ export default function StudentQuizCenter() {
                 </div>
               </div>
 
-              <div className="p-4 bg-muted/50 rounded-xl flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-primary shrink-0" />
-                <p className="text-xs text-muted-foreground">This quiz will be based on your "Biology: Fundamentals" study material.</p>
-              </div>
-
               <Button 
                 className="w-full h-12 text-lg font-headline bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20" 
-                disabled={loading}
+                disabled={loading || !fileData}
                 onClick={handleGenerate}
               >
                 {loading ? (
-                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Preparing Quiz...</>
+                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Analyzing Document...</>
                 ) : (
                   <><Sparkles className="w-5 h-5 mr-2" /> Start AI Quiz</>
                 )}
@@ -166,7 +197,7 @@ export default function StudentQuizCenter() {
             </div>
             <div className="flex items-center gap-2 text-muted-foreground bg-white px-3 py-1 rounded-full border shadow-sm">
               <Clock className="w-4 h-4" />
-              <span className="text-xs font-medium font-code">08:45 Remaining</span>
+              <span className="text-xs font-medium font-code">Multimodal AI Powered</span>
             </div>
           </div>
 
@@ -197,7 +228,7 @@ export default function StudentQuizCenter() {
 
                 {currentQuestion?.type !== 'MCQ' && (
                   <div className="pt-4 space-y-4">
-                    <p className="text-sm font-medium text-muted-foreground italic">AI Note: This is a {currentQuestion?.type} question. Answer clearly in your mind or write below.</p>
+                    <p className="text-sm font-medium text-muted-foreground italic">AI Note: This is a {currentQuestion?.type} question based on your document content.</p>
                     <textarea 
                       className="w-full min-h-[150px] p-4 rounded-xl border-2 border-muted bg-background focus:border-primary outline-none transition-all"
                       placeholder="Type your detailed answer here..."

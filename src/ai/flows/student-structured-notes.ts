@@ -11,11 +11,10 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const StudentStructuredNotesInputSchema = z.object({
-  studyMaterial: z
+  studyMaterialDataUri: z
     .string()
     .describe(
-      'The content of the study material (e.g., text extracted from a PDF/PPTX/DOCX or a direct text prompt).'+
-      'It can be a long string representing the entire document content.'
+      'A data URI of the study material (PDF, PPTX, Image) that must include a MIME type and use Base64 encoding.'
     ),
   detailLevel: z.enum(['summary', 'detailed']).default('detailed').describe('Level of detail for the notes: "summary" or "detailed".'),
   keywordsToFocus: z.array(z.string()).optional().describe('Optional keywords or topics to focus on when generating notes.'),
@@ -59,8 +58,7 @@ Instructions:
 Output Format:
 Respond ONLY with a JSON object matching the following schema. Ensure all fields are present and correctly formatted.
 
-Study Material:
-{{studyMaterial}}
+Study Material: {{media url=studyMaterialDataUri}}
 
 {{#if keywordsToFocus}}
 Focus Keywords/Topics: {{#each keywordsToFocus}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.

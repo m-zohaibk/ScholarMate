@@ -1,33 +1,50 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { generateStructuredNotes, type StudentStructuredNotesOutput } from '@/ai/flows/student-structured-notes';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { FileText, Sparkles, Loader2, Download, Copy, ListTree, Highlighter } from 'lucide-react';
+import { FileText, Sparkles, Loader2, Download, Copy, ListTree, Highlighter, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 
 export default function StudentNotesGenerator() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [input, setInput] = useState('');
+  const [fileData, setFileData] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [detailLevel, setDetailLevel] = useState<'summary' | 'detailed'>('detailed');
   const [notes, setNotes] = useState<StudentStructuredNotesOutput | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast({ title: "File too large", description: "Please upload a file smaller than 10MB.", variant: "destructive" });
+        return;
+      }
+      setFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFileData(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleGenerate = async () => {
-    if (!input) {
-      toast({ title: "Input Required", description: "Please enter study material or paste your content." });
+    if (!fileData) {
+      toast({ title: "Document Required", description: "Please upload a study document (PDF or Image)." });
       return;
     }
 
     setLoading(true);
     try {
       const result = await generateStructuredNotes({
-        studyMaterial: input,
+        studyMaterialDataUri: fileData,
         detailLevel,
       });
       setNotes(result);
@@ -37,6 +54,10 @@ export default function StudentNotesGenerator() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -56,13 +77,24 @@ export default function StudentNotesGenerator() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Study Material</Label>
-                <Textarea 
-                  placeholder="Paste textbook excerpts, lecture transcript, or your own prompts here..." 
-                  className="min-h-[300px] resize-none bg-background/50"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                <Label>Study Document (PDF or Image)</Label>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange}
+                  accept="application/pdf,image/*"
                 />
+                <div 
+                  onClick={triggerFileUpload}
+                  className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="font-medium">{fileName || "Click to upload document"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">PDF or Images up to 10MB</p>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -77,11 +109,11 @@ export default function StudentNotesGenerator() {
 
               <Button 
                 className="w-full h-12 text-lg font-headline bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20" 
-                disabled={loading}
+                disabled={loading || !fileData}
                 onClick={handleGenerate}
               >
                 {loading ? (
-                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Analyzing...</>
+                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Analyzing Document...</>
                 ) : (
                   <><Sparkles className="w-5 h-5 mr-2" /> Generate Notes</>
                 )}
@@ -98,7 +130,7 @@ export default function StudentNotesGenerator() {
               </div>
               <h3 className="font-headline text-xl font-bold text-muted-foreground">No Notes Yet</h3>
               <p className="text-muted-foreground max-w-xs mx-auto mt-2">
-                Upload or paste your material on the left to generate structured notes.
+                Upload your document on the left to generate structured notes using Vision AI.
               </p>
             </div>
           ) : (
