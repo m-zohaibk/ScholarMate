@@ -3,7 +3,10 @@
 ## 1. Project Information
 **Project Title:** Smart Academic Assistant System Using Artificial Intelligence for Automated Assessment and Student Learning Enhancement  
 **Program:** BS Computer Science (Morning/Evening)  
-**Students:** [Your Name] (Reg No: [Your ID])  
+**Students:** 
+1. Nida Saher (Reg No: COSC231112123)
+2. MUHAMMAD ZOHAIB (Reg No: COSC231112143)
+3. ALI MAQBOL (Reg No: COSC231112133)
 **Supervisor:** [Supervisor’s Name]  
 **Date:** October 26, 2023
 
