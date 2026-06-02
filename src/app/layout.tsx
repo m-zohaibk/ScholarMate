@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
 
 export const metadata: Metadata = {
-  title: 'ScholarMate AI | Academic Excellence with Intelligence',
+  title: 'Smart Academic Assistant | AI-Powered Learning',
   description: 'AI-powered study notes, quizzes, and schedules for students and teachers.',
 };
 

@@ -10,9 +10,7 @@ import {
   Calendar, 
   Settings, 
   LogOut, 
-  Sparkles,
-  GraduationCap,
-  BookOpen
+  Sparkles
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -40,10 +38,10 @@ export function DashboardSidebar({ role }: SidebarProps) {
     <div className="h-screen w-64 bg-white border-r flex flex-col fixed left-0 top-0">
       <div className="p-6">
         <Link href="/" className="flex items-center gap-2">
-          <div className="bg-primary p-1.5 rounded-lg">
-            <Sparkles className="text-white w-5 h-5" />
+          <div className="bg-primary p-1.5 rounded-lg text-white">
+            <Sparkles className="w-5 h-5" />
           </div>
-          <span className="font-headline font-bold text-lg tracking-tight text-primary">ScholarMate</span>
+          <span className="font-headline font-bold text-lg tracking-tight text-primary leading-tight">AI Academic Hub</span>
         </Link>
       </div>
 

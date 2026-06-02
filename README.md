@@ -1,4 +1,4 @@
-# ScholarMate AI
+# Smart Academic Assistant System Using Artificial Intelligence for Automated Assessment and Student Learning Enhancement
 
 This is a NextJS platform built with Firebase and Genkit, designed for AI-powered academic assistance.
 
@@ -8,9 +8,10 @@ This is a NextJS platform built with Firebase and Genkit, designed for AI-powere
 - **Teacher Dashboard**: `/teacher`
 
 ## Features
-- **Vision OCR**: Understands handwritten notes and complex PDF diagrams.
-- **Active Recall**: Generates quizzes with immediate feedback and AI explanations.
-- **Structured Notes**: Converts long documents into hierarchical study summaries.
+- **Vision OCR**: High-precision recognition of handwritten notes and complex PDF diagrams.
+- **Active Recall**: Generates quizzes with immediate color-coded feedback and AI explanations.
+- **Structured Notes**: Converts long documents into hierarchical study summaries using Gemini 2.5 Flash.
+- **Automated Assessment**: Teacher-led syllabus analysis and exam generation.
 
 ## Tech Stack
 - **Frontend**: Next.js 15, Tailwind CSS, ShadCN UI.

@@ -1,7 +1,7 @@
-# Project Proposal: ScholarMate AI
+# Project Proposal: Smart Academic Assistant System Using Artificial Intelligence for Automated Assessment and Student Learning Enhancement
 
 ## 1. Project Information
-**Project Title:** ScholarMate AI: Academic Excellence with Intelligence  
+**Project Title:** Smart Academic Assistant System Using Artificial Intelligence for Automated Assessment and Student Learning Enhancement  
 **Program:** BS Computer Science (Morning/Evening)  
 **Students:** [Your Name] (Reg No: [Your ID])  
 **Supervisor:** [Supervisor’s Name]  
@@ -10,12 +10,12 @@
 ---
 
 ## 2. Abstract
-ScholarMate AI is an intelligent educational platform designed to bridge the gap between static study materials and active learning. The problem addressed is the significant time students and teachers spend manually organizing notes and creating assessments. The proposed solution leverages **Gemini 2.5 Flash** via **Genkit** to perform high-fidelity OCR on handwritten notes and complex PDFs, automatically transforming them into structured hierarchical notes and interactive quizzes. Key technologies include **Next.js 15**, **Firebase (Auth & Firestore)**, and **ShadCN UI**. The expected impact is a 40% reduction in study-prep time and improved retention through immediate feedback loops.
+The Smart Academic Assistant System is an intelligent educational platform designed to bridge the gap between static study materials and active learning. The problem addressed is the significant time students and teachers spend manually organizing notes and creating assessments. The proposed solution leverages **Gemini 2.5 Flash** via **Genkit** to perform high-fidelity OCR on handwritten notes and complex PDFs, automatically transforming them into structured hierarchical notes and interactive quizzes. Key technologies include **Next.js 15**, **Firebase (Auth & Firestore)**, and **ShadCN UI**. The expected impact is a 40% reduction in study-prep time and improved retention through immediate feedback loops.
 
 ---
 
 ## 3. Introduction / Background
-In the modern academic landscape, students are overwhelmed with information in diverse formats (images, handwritten notebooks, digital PDFs). Traditional study methods are often passive. ScholarMate AI introduces an "AI Study Partner" that actively processes these materials.
+In the modern academic landscape, students are overwhelmed with information in diverse formats (images, handwritten notebooks, digital PDFs). Traditional study methods are often passive. This system introduces an "AI Study Partner" that actively processes these materials.
 - **Significance:** Automates the most tedious parts of learning (summarization and test creation).
 - **SDG Alignment:** Addresses **Goal 4: Quality Education** by providing accessible, high-quality personalized tutoring tools that adapt to individual study materials.
 
@@ -91,7 +91,7 @@ In the modern academic landscape, students are overwhelmed with information in d
 ---
 
 ## 12. Expected Deliverables
-- **Software Prototype:** Fully functional web app at `scholarmate.web.app`.
+- **Software Prototype:** Fully functional web app at the provided domain.
 - **Database:** Structured Firestore schema for User Profiles, Documents, and Quizzes.
 - **Documentation:** User manual, Technical architecture guide, and Final Thesis Report.
 - **Presentation:** 15-minute live demo of handwriting-to-quiz conversion.
