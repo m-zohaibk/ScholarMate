@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { inflateRawSync } from 'node:zlib';
 
 export type SupportedDocument = 'pdf' | 'docx' | 'pptx' | 'image';
@@ -45,29 +48,28 @@ function decodeXml(text: string) {
   return text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 }
 
-export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 8) {
-  const [{ createCanvas }, pdfjs] = await Promise.all([
-    import(/* webpackIgnore: true */ '@napi-rs/canvas'),
-    import('pdfjs-dist/legacy/build/pdf.mjs'),
-  ]);
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
-  const pdf = await loadingTask.promise;
-  const pageCount = Math.min(pdf.numPages, maxPages);
-  const pages: string[] = [];
+const execFileAsync = promisify(execFile);
+
+async function withTempPdf<T>(buffer: Buffer, callback: (pdfPath: string, tempDir: string) => Promise<T>) {
+  const tempDir = await mkdtemp('/tmp/scholarmate-pdf-');
+  const pdfPath = `${tempDir}/source.pdf`;
+  await writeFile(pdfPath, buffer);
   try {
-    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const context = canvas.getContext('2d');
-      await page.render({ canvasContext: context as never, canvas: canvas as never, viewport }).promise;
-      pages.push(`data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`);
-      page.cleanup();
-    }
+    return await callback(pdfPath, tempDir);
   } finally {
-    await loadingTask.destroy();
+    await rm(tempDir, { recursive: true, force: true });
   }
-  return pages;
+}
+
+export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 8) {
+  return withTempPdf(buffer, async (pdfPath, tempDir) => {
+    const prefix = `${tempDir}/page`;
+    await execFileAsync('pdftoppm', ['-png', '-r', '160', '-f', '1', '-l', String(maxPages), pdfPath, prefix]);
+    const names = (await readdir(tempDir))
+      .filter((name) => /^page-\d+\.png$/i.test(name))
+      .sort((a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0));
+    return Promise.all(names.map(async (name) => `data:image/png;base64,${(await readFile(`${tempDir}/${name}`)).toString('base64')}`));
+  });
 }
 
 function readZipEntries(buffer: Buffer) {
@@ -104,22 +106,10 @@ function readZipEntries(buffer: Buffer) {
 }
 
 async function extractPdfText(buffer: Buffer) {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
-  try {
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
-      pages.push(pageText);
-      page.cleanup();
-    }
-  } finally {
-    await loadingTask.destroy();
-  }
-  return cleanText(pages.join('\n'));
+  return withTempPdf(buffer, async (pdfPath) => {
+    const { stdout } = await execFileAsync('pdftotext', ['-layout', '-enc', 'UTF-8', pdfPath, '-']);
+    return cleanText(stdout);
+  });
 }
 
 async function extractDocxText(buffer: Buffer) {
