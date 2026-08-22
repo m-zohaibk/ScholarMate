@@ -14,6 +14,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof DocumentInputError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422 });
     console.error('[API] Student notes generation failed:', error);
+    const providerMessage = String((error as { originalMessage?: unknown })?.originalMessage || error);
+    if (providerMessage.includes('401 Unauthorized')) return NextResponse.json({ error: 'Google AI authentication failed. Use a Google AI Studio API key in GOOGLE_GENAI_API_KEY, not an OAuth token.' }, { status: 503 });
+    if (providerMessage.includes('429')) return NextResponse.json({ error: 'Google AI rate limit reached. Wait a moment and try again.' }, { status: 429 });
     return NextResponse.json({ error: 'The document could not be analyzed. Try a smaller, clearer file.' }, { status: 500 });
   }
 }
