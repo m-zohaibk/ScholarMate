@@ -146,7 +146,7 @@ export default function StudentQuizCenter() {
     }
   };
 
-  return (
+  return <>
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="font-headline text-3xl font-bold">Interactive AI Quiz</h1>
@@ -216,7 +216,7 @@ export default function StudentQuizCenter() {
               <Button 
                 className="w-full h-12 text-lg font-headline bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20" 
                 disabled={loading || !fileData}
-                onClick={handleGenerate}
+                onClick={() => void handleGenerate()}
               >
                 {loading ? (
                   <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Decoding Material...</>
@@ -378,5 +378,5 @@ export default function StudentQuizCenter() {
         </div>
       )}
     </div>
-  );
+  </>;
 }

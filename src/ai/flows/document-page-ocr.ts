@@ -36,6 +36,10 @@ const documentPageOcrFlow = ai.defineFlow(
   },
 );
 
-export async function ocrDocumentPage(input: z.infer<typeof DocumentPageOcrInputSchema>) {
+export async function ocrDocumentPage(input: z.infer<typeof DocumentPageOcrInputSchema>, options?: { apiKey?: string }) {
+  if (options?.apiKey) {
+    const { output } = await pageOcrPrompt(input, { config: { apiKey: options.apiKey } });
+    return output!;
+  }
   return documentPageOcrFlow(input);
 }

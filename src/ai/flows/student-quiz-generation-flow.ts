@@ -41,8 +41,13 @@ const StudentQuizGenerationOutputSchema = z.object({
 export type StudentQuizGenerationOutput = z.infer<typeof StudentQuizGenerationOutputSchema>;
 
 export async function generateStudentQuiz(
-  input: StudentQuizGenerationInput
+  input: StudentQuizGenerationInput,
+  options?: { apiKey?: string }
 ): Promise<StudentQuizGenerationOutput> {
+  if (options?.apiKey) {
+    const { output } = await generateStudentQuizPrompt(input, { config: { apiKey: options.apiKey } });
+    return output!;
+  }
   return studentQuizGenerationFlow(input);
 }
 

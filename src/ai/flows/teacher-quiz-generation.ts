@@ -62,6 +62,10 @@ const teacherQuizGenerationFlow = ai.defineFlow(
 );
 
 // Wrapper function
-export async function generateTeacherQuiz(input: GenerateTeacherQuizInput): Promise<GenerateTeacherQuizOutput> {
+export async function generateTeacherQuiz(input: GenerateTeacherQuizInput, options?: { apiKey?: string }): Promise<GenerateTeacherQuizOutput> {
+  if (options?.apiKey) {
+    const { output } = await quizGeneratorPrompt(input, { config: { apiKey: options.apiKey } });
+    return output!;
+  }
   return teacherQuizGenerationFlow(input);
 }

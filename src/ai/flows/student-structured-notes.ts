@@ -40,7 +40,11 @@ const StudentStructuredNotesOutputSchema = z.object({
 });
 export type StudentStructuredNotesOutput = z.infer<typeof StudentStructuredNotesOutputSchema>;
 
-export async function generateStructuredNotes(input: StudentStructuredNotesInput): Promise<StudentStructuredNotesOutput> {
+export async function generateStructuredNotes(input: StudentStructuredNotesInput, options?: { apiKey?: string }): Promise<StudentStructuredNotesOutput> {
+  if (options?.apiKey) {
+    const { output } = await prompt(input, { config: { apiKey: options.apiKey } });
+    return output!;
+  }
   return studentStructuredNotesFlow(input);
 }
 
@@ -71,11 +75,7 @@ Focus Keywords/Topics: {{#each keywordsToFocus}}{{{this}}}{{#unless @last}}, {{/
 {{/if}}
 
 Detail Level: {{{detailLevel}}}
-{{#if (eq detailLevel "summary")}}
-Prioritize brevity, high-level themes, and core conclusions.
-{{else}}
-Include comprehensive details, covering all significant points, definitions, and examples mentioned in the material.
-{{/if}}
+If the detail level is summary, prioritize brevity, high-level themes, and core conclusions. If the detail level is detailed, include comprehensive details covering all significant points, definitions, and examples mentioned in the material.
 `,
 });
 
