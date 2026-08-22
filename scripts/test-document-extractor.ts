@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { normalizeDocument } from '../src/lib/document-extractor';
 
 function crc32(buffer: Buffer) {
@@ -66,8 +67,9 @@ async function main() {
   const pptxResult = await normalizeDocument(toDataUri('application/vnd.openxmlformats-officedocument.presentationml.presentation', pptx), 'lesson.pptx');
   if (!pptxResult.extractedText.includes('Photosynthesis')) throw new Error('PPTX extraction failed');
 
-  const pdfResult = await normalizeDocument(toDataUri('application/pdf', Buffer.from('%PDF-invalid-scanned-placeholder')), 'scan.pdf');
-  if (!pdfResult.isScannedPdf || pdfResult.aiDataUri === '') throw new Error('Scanned PDF fallback failed');
+  const scannedPdf = await readFile('/tmp/scholarmate-scanned-fixture.pdf');
+  const pdfResult = await normalizeDocument(toDataUri('application/pdf', scannedPdf), 'scan.pdf');
+  if (!pdfResult.isScannedPdf || pdfResult.pdfPageImages.length !== 1) throw new Error('Scanned PDF page rendering failed');
 
   console.log('document extractor smoke test passed');
 }

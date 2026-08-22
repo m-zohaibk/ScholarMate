@@ -43,6 +43,31 @@ function cleanText(text: string) {
   return text.replace(/\u0000/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 8) {
+  const [{ createCanvas }, pdfjs] = await Promise.all([
+    import(/* webpackIgnore: true */ '@napi-rs/canvas'),
+    import('pdfjs-dist/legacy/build/pdf.mjs'),
+  ]);
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
+  const pdf = await loadingTask.promise;
+  const pageCount = Math.min(pdf.numPages, maxPages);
+  const pages: string[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const context = canvas.getContext('2d');
+      await page.render({ canvasContext: context as never, canvas: canvas as never, viewport }).promise;
+      pages.push(`data:image/png;base64,${canvas.toBuffer('image/png').toString('base64')}`);
+      page.cleanup();
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+  return pages;
+}
+
 function readZipEntries(buffer: Buffer) {
   const eocdSignature = 0x06054b50;
   let eocdOffset = -1;
@@ -100,7 +125,7 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
     } catch {
       extractedText = '';
     }
-    // Keep the original PDF for Gemini vision when text extraction is empty or incomplete.
+    // Text PDFs use their extracted text. Scanned PDFs are rendered page-by-page for real vision OCR.
     if (extractedText.length > 40) aiDataUri = textDataUri(extractedText);
   } else if (format === 'docx') {
     try {
@@ -121,11 +146,21 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
     aiDataUri = textDataUri(extractedText);
   }
 
+  const isScannedPdf = format === 'pdf' && extractedText.length <= 40;
+  let pdfPageImages: string[] = [];
+  if (isScannedPdf) {
+    try {
+      pdfPageImages = await renderPdfPagesToImages(buffer);
+    } catch {
+      throw new DocumentInputError('This PDF appears to be damaged or unreadable. Export it again or upload a clearer PDF/image.', 'invalid-data-uri');
+    }
+  }
   return {
     format,
     fileName: fileName || `uploaded.${format}`,
     extractedText,
     aiDataUri,
-    isScannedPdf: format === 'pdf' && extractedText.length <= 40,
+    isScannedPdf,
+    pdfPageImages,
   };
 }
