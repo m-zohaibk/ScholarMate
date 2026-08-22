@@ -1,5 +1,4 @@
 import { inflateRawSync } from 'node:zlib';
-import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 export type SupportedDocument = 'pdf' | 'docx' | 'pptx' | 'image';
 
@@ -104,6 +103,25 @@ function readZipEntries(buffer: Buffer) {
   return entries;
 }
 
+async function extractPdfText(buffer: Buffer) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer), useSystemFonts: true });
+  const pdf = await loadingTask.promise;
+  const pages: string[] = [];
+  try {
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
+      pages.push(pageText);
+      page.cleanup();
+    }
+  } finally {
+    await loadingTask.destroy();
+  }
+  return cleanText(pages.join('\n'));
+}
+
 async function extractDocxText(buffer: Buffer) {
   const entries = readZipEntries(buffer);
   const xml = entries.get('word/document.xml')?.toString('utf8') || '';
@@ -133,8 +151,7 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
 
   if (format === 'pdf') {
     try {
-      const parsed = await pdfParse(buffer);
-      extractedText = cleanText(parsed.text || '');
+      extractedText = await extractPdfText(buffer);
     } catch {
       extractedText = '';
     }
