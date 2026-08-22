@@ -18,6 +18,8 @@ const StudentStructuredNotesInputSchema = z.object({
     ),
   detailLevel: z.enum(['summary', 'detailed']).default('detailed').describe('Level of detail for the notes: "summary" or "detailed".'),
   keywordsToFocus: z.array(z.string()).optional().describe('Optional keywords or topics to focus on when generating notes.'),
+  studyMaterialText: z.string().optional().describe('Text extracted from a DOCX, PPTX, or text-based PDF. Use this instead of media when available.'),
+  documentFormat: z.string().optional().describe('The uploaded document format.'),
 });
 export type StudentStructuredNotesInput = z.infer<typeof StudentStructuredNotesInputSchema>;
 
@@ -57,7 +59,12 @@ Instructions:
 3. Organize content into a hierarchical structure using logical sections and headings.
 4. Extract key facts, definitions, and concepts into bullet points.
 
+{{#if studyMaterialText}}
+Extracted Study Material Text:
+{{{studyMaterialText}}}
+{{else}}
 Study Material: {{media url=studyMaterialDataUri}}
+{{/if}}
 
 {{#if keywordsToFocus}}
 Focus Keywords/Topics: {{#each keywordsToFocus}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.

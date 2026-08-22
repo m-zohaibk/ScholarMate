@@ -21,6 +21,8 @@ const StudentQuizGenerationInputSchema = z.object({
     .array(z.string())
     .optional()
     .describe('Optional array of topics or keywords to focus the quiz questions on.'),
+  studyMaterialText: z.string().optional().describe('Text extracted from a DOCX, PPTX, or text-based PDF.'),
+  documentFormat: z.string().optional().describe('The uploaded document format.'),
 });
 export type StudentQuizGenerationInput = z.infer<typeof StudentQuizGenerationInputSchema>;
 
@@ -67,7 +69,12 @@ Focus on: {{{focusTopics}}}
 Cover the most important concepts throughout the material.
 {{/if}}
 
+{{#if studyMaterialText}}
+Extracted Study Material Text:
+{{{studyMaterialText}}}
+{{else}}
 Study Material: {{media url=studyMaterialDataUri}}
+{{/if}}
 
 Instructions:
 1. MCQ: Provide 4 plausible options. The 'correctAnswer' must be the exact text of the correct option.

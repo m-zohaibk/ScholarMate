@@ -9,7 +9,8 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:documents": "tsx scripts/test-document-extractor.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
@@ -42,9 +43,12 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.9.1",
     "genkit": "^1.28.0",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
+    "mammoth": "^1.12.1",
     "next": "15.5.9",
     "patch-package": "^8.0.0",
+    "pdf-parse": "^1.1.1",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.3",
     "react-dom": "^19.2.1",

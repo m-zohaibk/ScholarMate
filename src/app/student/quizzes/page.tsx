@@ -53,8 +53,10 @@ export default function StudentQuizCenter() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        toast({ title: 'Unsupported file', description: 'Choose a PDF or image file.', variant: 'destructive' });
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const supported = file.type.startsWith('image/') || file.type === 'application/pdf' || extension === 'docx' || extension === 'pptx';
+      if (!supported) {
+        toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
@@ -95,9 +97,10 @@ export default function StudentQuizCenter() {
     setScore(0);
 
     try {
-      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: fileData, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'] }) });
-      if (!response.ok) throw new Error('quiz-generation-failed');
-      const result = await response.json() as StudentQuizGenerationOutput;
+      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: fileData, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'] }) });
+      const payload = await response.json() as { error?: string } & StudentQuizGenerationOutput;
+      if (!response.ok) throw new Error(payload.error || 'The document could not be analyzed.');
+      const result = payload;
       const generatedId = makeId('student-quiz');
       setQuizId(generatedId);
       setQuiz(result);
@@ -106,7 +109,7 @@ export default function StudentQuizCenter() {
       void saveQuizToFirestore(firestore, user, savedQuiz).catch(() => undefined);
       toast({ title: "Quiz Ready!", description: "AI has processed your document, including handwritten notes." });
     } catch (error) {
-      toast({ title: "Error", description: "Failed to generate quiz. Try a clearer image or PDF." });
+      toast({ title: 'Generation failed', description: error instanceof Error ? error.message : 'The document could not be analyzed.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -159,17 +162,17 @@ export default function StudentQuizCenter() {
                 <BookOpen className="w-10 h-10 text-primary" />
               </div>
               <h3 className="font-headline text-xl font-bold">Smart Analysis</h3>
-              <p className="text-sm text-muted-foreground mt-2">Supports PDFs, printed text, and handwriting OCR.</p>
+              <p className="text-sm text-muted-foreground mt-2">Supports PDFs, printed text, handwriting OCR, DOCX, and PPTX files.</p>
             </div>
             <div className="md:w-2/3 p-8 space-y-6 bg-white">
               <div className="space-y-2">
-                <Label>Source Document (Handwritten or Digital)</Label>
+                <Label>Source Document (PDF, Image, DOCX, or PPTX)</Label>
                 <input 
                   type="file" 
                   className="hidden" 
                   ref={fileInputRef} 
                   onChange={handleFileChange}
-                  accept="application/pdf,image/*"
+                  accept="application/pdf,image/*,.docx,.pptx"
                 />
                 <Button 
                   variant="outline" 
@@ -177,7 +180,7 @@ export default function StudentQuizCenter() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {fileName || "Upload image or PDF"}
+                  {fileName || "Upload PDF, image, DOCX, or PPTX"}
                 </Button>
               </div>
 
