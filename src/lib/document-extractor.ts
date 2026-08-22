@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import { inflateRawSync } from 'node:zlib';
 import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
@@ -43,14 +43,47 @@ function cleanText(text: string) {
   return text.replace(/\u0000/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function readZipEntries(buffer: Buffer) {
+  const eocdSignature = 0x06054b50;
+  let eocdOffset = -1;
+  for (let offset = buffer.length - 22; offset >= Math.max(0, buffer.length - 65557); offset -= 1) {
+    if (buffer.readUInt32LE(offset) === eocdSignature) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+  if (eocdOffset < 0) throw new Error('ZIP end record not found');
+  const entryCount = buffer.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = buffer.readUInt32LE(eocdOffset + 16);
+  const entries = new Map<string, Buffer>();
+  let offset = centralDirectoryOffset;
+  for (let index = 0; index < entryCount; index += 1) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error('ZIP central directory is invalid');
+    const compression = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const fileNameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localOffset = buffer.readUInt32LE(offset + 42);
+    const name = buffer.subarray(offset + 46, offset + 46 + fileNameLength).toString('utf8');
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const compressed = buffer.subarray(localOffset + 30 + localNameLength + localExtraLength, localOffset + 30 + localNameLength + localExtraLength + compressedSize);
+    if (compression === 0) entries.set(name, Buffer.from(compressed));
+    else if (compression === 8) entries.set(name, inflateRawSync(compressed));
+    offset += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
 async function extractPptxText(buffer: Buffer) {
-  const zip = await JSZip.loadAsync(buffer);
-  const slideNames = Object.keys(zip.files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const slides = await Promise.all(slideNames.map(async (name, index) => {
-    const xml = await zip.files[name].async('text');
+  const entries = readZipEntries(buffer);
+  const slideNames = [...entries.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const slides = slideNames.map((name, index) => {
+    const xml = entries.get(name)?.toString('utf8') || '';
     const text = [...xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi)].map((match) => match[1]).join(' ');
     return text ? `Slide ${index + 1}\n${text}` : '';
-  }));
+  });
   return cleanText(slides.filter(Boolean).join('\n\n'));
 }
 
