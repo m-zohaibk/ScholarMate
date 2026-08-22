@@ -1,4 +1,5 @@
-const GOOGLE_AI_ENV_NAMES = ['GOOGLE_GENAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'] as const;
+// Match the Google Genkit plugin's lookup order. Prefer one variable in deployment to avoid shadowing.
+const GOOGLE_AI_ENV_NAMES = ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'] as const;
 
 export function getGoogleAiConfigurationError() {
   const configuredKey = GOOGLE_AI_ENV_NAMES.map((name) => process.env[name]?.trim()).find(Boolean);
