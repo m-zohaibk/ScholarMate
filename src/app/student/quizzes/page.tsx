@@ -1,7 +1,7 @@
-"use client"
+'use client';
 
-import { useState, useRef } from 'react';
-import { generateStudentQuiz, type StudentQuizGenerationOutput } from '@/ai/flows/student-quiz-generation-flow';
+import { useEffect, useState, useRef } from 'react';
+import type { StudentQuizGenerationOutput } from '@/ai/flows/student-quiz-generation-flow';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -11,13 +11,33 @@ import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { getQuizzes, makeId, saveAttempt, saveQuiz, type StoredQuiz } from '@/lib/study-store';
+import { useFirebase } from '@/firebase';
+import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
+  const { firestore, user, isUserLoading } = useFirebase();
   const [loading, setLoading] = useState(false);
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [numQuestions, setNumQuestions] = useState(5);
   const [quiz, setQuiz] = useState<StudentQuizGenerationOutput | null>(null);
+  const [quizId, setQuizId] = useState('');
+  const [publishedQuizzes, setPublishedQuizzes] = useState<StoredQuiz[]>([]);
+
+  useEffect(() => {
+    const refresh = () => setPublishedQuizzes(getQuizzes().filter((item) => item.source === 'teacher' && item.published));
+    refresh();
+    window.addEventListener('scholarmate:changed', refresh);
+    return () => window.removeEventListener('scholarmate:changed', refresh);
+  }, []);
+
+  useEffect(() => {
+    if (isUserLoading || !user) return;
+    loadPublishedQuizzes(firestore, user).then((remoteQuizzes) => {
+      if (remoteQuizzes.length) setPublishedQuizzes(remoteQuizzes);
+    }).catch(() => undefined);
+  }, [firestore, isUserLoading, user]);
   
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -33,6 +53,14 @@ export default function StudentQuizCenter() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        toast({ title: 'Unsupported file', description: 'Choose a PDF or image file.', variant: 'destructive' });
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast({ title: 'File too large', description: 'Please upload a file smaller than 10MB.', variant: 'destructive' });
+        return;
+      }
       setFileName(file.name);
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -40,6 +68,16 @@ export default function StudentQuizCenter() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const startPublishedQuiz = (publishedQuiz: StoredQuiz) => {
+    setQuizId(publishedQuiz.id);
+    setQuiz({ quizTitle: publishedQuiz.title, questions: publishedQuiz.questions as StudentQuizGenerationOutput['questions'] });
+    setActiveQuestion(0);
+    setUserAnswers({});
+    setCheckedAnswers({});
+    setScore(0);
+    setIsSubmitted(false);
   };
 
   const handleGenerate = async () => {
@@ -57,13 +95,15 @@ export default function StudentQuizCenter() {
     setScore(0);
 
     try {
-      const result = await generateStudentQuiz({
-        studyMaterialDataUri: fileData,
-        difficulty,
-        numberOfQuestions: numQuestions,
-        questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'],
-      });
+      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: fileData, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'] }) });
+      if (!response.ok) throw new Error('quiz-generation-failed');
+      const result = await response.json() as StudentQuizGenerationOutput;
+      const generatedId = makeId('student-quiz');
+      setQuizId(generatedId);
       setQuiz(result);
+      const savedQuiz = { id: generatedId, title: result.quizTitle, questions: result.questions, source: 'student' as const, creator: 'student', published: false, createdAt: new Date().toISOString() };
+      saveQuiz(savedQuiz);
+      void saveQuizToFirestore(firestore, user, savedQuiz).catch(() => undefined);
       toast({ title: "Quiz Ready!", description: "AI has processed your document, including handwritten notes." });
     } catch (error) {
       toast({ title: "Error", description: "Failed to generate quiz. Try a clearer image or PDF." });
@@ -96,6 +136,9 @@ export default function StudentQuizCenter() {
     if (activeQuestion < (quiz?.questions.length || 0) - 1) {
       setActiveQuestion(prev => prev + 1);
     } else {
+      const attempt = { id: makeId('attempt'), quizId: quizId || quiz?.quizTitle || 'student-quiz', quizTitle: quiz?.quizTitle || 'Student quiz', score, total: quiz?.questions.length || 0, completedAt: new Date().toISOString() };
+      saveAttempt(attempt);
+      void saveAttemptToFirestore(firestore, user, attempt).catch(() => undefined);
       setIsSubmitted(true);
     }
   };
@@ -108,6 +151,7 @@ export default function StudentQuizCenter() {
       </div>
 
       {!quiz ? (
+        <div className="space-y-6">
         <Card className="border-none shadow-sm overflow-hidden">
           <div className="md:flex">
             <div className="md:w-1/3 bg-primary/5 p-8 flex flex-col items-center justify-center text-center border-r border-dashed">
@@ -180,6 +224,8 @@ export default function StudentQuizCenter() {
             </div>
           </div>
         </Card>
+        {publishedQuizzes.length > 0 && <Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg">Published by your teacher</CardTitle><CardDescription>Start a shared assessment from your course.</CardDescription></CardHeader><CardContent className="space-y-2">{publishedQuizzes.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.questions.length} questions</p></div><Button size="sm" onClick={() => startPublishedQuiz(item)}>Start</Button></div>)}</CardContent></Card>}
+        </div>
       ) : isSubmitted ? (
         <Card className="border-none shadow-xl text-center p-12 space-y-8 animate-in zoom-in-95 duration-500">
           <div className="space-y-2">
@@ -201,7 +247,7 @@ export default function StudentQuizCenter() {
           </div>
 
           <div className="space-y-4 max-w-sm mx-auto">
-            <Button className="w-full h-12 font-headline" onClick={() => setQuiz(null)}>Start New Session</Button>
+            <Button className="w-full h-12 font-headline" onClick={() => { setQuiz(null); setQuizId(''); setFileData(null); setFileName(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
             <Button variant="outline" className="w-full h-12 font-headline" asChild><a href="/student">Dashboard</a></Button>
           </div>
         </Card>

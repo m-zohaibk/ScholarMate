@@ -18,10 +18,10 @@ export default function Home() {
           <Link href="/student" className="text-sm font-medium hover:text-primary transition-colors">Student Hub</Link>
           <Link href="/teacher" className="text-sm font-medium hover:text-primary transition-colors">Teacher Hub</Link>
           <Button variant="ghost" asChild>
-            <Link href="/auth">Login</Link>
+            <Link href="/student">Login</Link>
           </Button>
           <Button asChild>
-            <Link href="/auth">Get Started</Link>
+            <Link href="/student">Get Started</Link>
           </Button>
         </nav>
       </header>
@@ -39,10 +39,10 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button size="lg" className="h-12 px-8 text-lg font-medium bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20" asChild>
-                <Link href="/student">I'm a Student</Link>
+                <Link href="/student">I&apos;m a Student</Link>
               </Button>
               <Button size="lg" variant="outline" className="h-12 px-8 text-lg font-medium shadow-sm" asChild>
-                <Link href="/teacher">I'm a Teacher</Link>
+                <Link href="/teacher">I&apos;m a Teacher</Link>
               </Button>
             </div>
           </div>
