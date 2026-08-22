@@ -1,5 +1,4 @@
 import { inflateRawSync } from 'node:zlib';
-import mammoth from 'mammoth';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 export type SupportedDocument = 'pdf' | 'docx' | 'pptx' | 'image';
@@ -41,6 +40,10 @@ function textDataUri(text: string) {
 
 function cleanText(text: string) {
   return text.replace(/\u0000/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function decodeXml(text: string) {
+  return text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
 }
 
 export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 8) {
@@ -101,12 +104,22 @@ function readZipEntries(buffer: Buffer) {
   return entries;
 }
 
+async function extractDocxText(buffer: Buffer) {
+  const entries = readZipEntries(buffer);
+  const xml = entries.get('word/document.xml')?.toString('utf8') || '';
+  const paragraphs = xml.split(/<w:p(?:\s[^>]*)?>/i).slice(1).map((paragraph) => {
+    const text = [...paragraph.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/gi)].map((match) => decodeXml(match[1])).join('');
+    return text;
+  });
+  return cleanText(paragraphs.filter(Boolean).join('\n'));
+}
+
 async function extractPptxText(buffer: Buffer) {
   const entries = readZipEntries(buffer);
   const slideNames = [...entries.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const slides = slideNames.map((name, index) => {
     const xml = entries.get(name)?.toString('utf8') || '';
-    const text = [...xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi)].map((match) => match[1]).join(' ');
+    const text = [...xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi)].map((match) => decodeXml(match[1])).join(' ');
     return text ? `Slide ${index + 1}\n${text}` : '';
   });
   return cleanText(slides.filter(Boolean).join('\n\n'));
@@ -129,8 +142,7 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
     if (extractedText.length > 40) aiDataUri = textDataUri(extractedText);
   } else if (format === 'docx') {
     try {
-      const result = await mammoth.extractRawText({ buffer });
-      extractedText = cleanText(result.value || '');
+      extractedText = await extractDocxText(buffer);
     } catch {
       throw new DocumentInputError('This DOCX file appears to be damaged or unreadable.', 'invalid-data-uri');
     }

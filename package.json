@@ -47,7 +47,6 @@
     "firebase": "^11.9.1",
     "genkit": "^1.28.0",
     "lucide-react": "^0.475.0",
-    "mammoth": "^1.12.1",
     "next": "15.5.9",
     "patch-package": "^8.0.0",
     "pdf-parse": "^1.1.1",
