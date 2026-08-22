@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { generateTeacherQuiz } from '@/ai/flows/teacher-quiz-generation';
+import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
 export async function POST(request: Request) {
+  const configurationError = getGoogleAiConfigurationError();
+  if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });
   try {
     const input = await request.json();
     const result = await generateTeacherQuiz(input);

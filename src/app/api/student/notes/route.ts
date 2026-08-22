@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { generateStructuredNotes } from '@/ai/flows/student-structured-notes';
 import { DocumentInputError, normalizeDocument } from '@/lib/document-extractor';
 import { ocrRenderedPdfPages } from '@/lib/scanned-pdf-ocr';
+import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
 export async function POST(request: Request) {
+  const configurationError = getGoogleAiConfigurationError();
+  if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });
   try {
     const input = await request.json();
     const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });
