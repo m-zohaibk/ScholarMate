@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { getQuizzes, makeId, saveAttempt, saveQuiz, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
+import { preparePdfForUpload } from '@/lib/browser-pdf';
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
@@ -41,6 +42,8 @@ export default function StudentQuizCenter() {
   
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [pdfText, setPdfText] = useState('');
+  const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Quiz taking state
@@ -50,25 +53,39 @@ export default function StudentQuizCenter() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const extension = file.name.split('.').pop()?.toLowerCase();
-      const supported = file.type.startsWith('image/') || file.type === 'application/pdf' || extension === 'docx' || extension === 'pptx';
-      if (!supported) {
-        toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
-        return;
+    if (!file) return;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const isPdf = file.type === 'application/pdf' || extension === 'pdf';
+    const supported = file.type.startsWith('image/') || isPdf || extension === 'docx' || extension === 'pptx';
+    if (!supported) {
+      toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Please upload a file smaller than 10MB.', variant: 'destructive' });
+      return;
+    }
+    setFileName(file.name);
+    setPdfText('');
+    setPdfPageImages([]);
+    try {
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read file.'));
+        reader.onerror = () => reject(new Error('Could not read file.'));
+        reader.readAsDataURL(file);
+      });
+      setFileData(dataUri);
+      if (isPdf) {
+        const prepared = await preparePdfForUpload(file);
+        setPdfText(prepared.text);
+        setPdfPageImages(prepared.pageImages);
       }
-      if (file.size > 10 * 1024 * 1024) {
-        toast({ title: 'File too large', description: 'Please upload a file smaller than 10MB.', variant: 'destructive' });
-        return;
-      }
-      setFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFileData(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    } catch (error) {
+      setFileData(null);
+      toast({ title: 'Could not read file', description: error instanceof Error ? error.message : 'Please choose the file again.', variant: 'destructive' });
     }
   };
 
@@ -95,9 +112,10 @@ export default function StudentQuizCenter() {
     setUserAnswers({});
     setCheckedAnswers({});
     setScore(0);
+    const preparedPdf = pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData;
 
     try {
-      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: fileData, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'] }) });
+      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined }) });
       const payload = await response.json() as { error?: string } & StudentQuizGenerationOutput;
       if (!response.ok) throw new Error(payload.error || 'The document could not be analyzed.');
       const result = payload;

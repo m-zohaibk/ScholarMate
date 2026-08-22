@@ -133,17 +133,25 @@ async function extractPptxText(buffer: Buffer) {
   return cleanText(slides.filter(Boolean).join('\n\n'));
 }
 
-export async function normalizeDocument(dataUri: string, fileName?: string, declaredMimeType?: string) {
+export type ClientPdfPreparation = {
+  text?: string;
+  pageImages?: string[];
+};
+
+export async function normalizeDocument(dataUri: string, fileName?: string, declaredMimeType?: string, clientPdf?: ClientPdfPreparation) {
   const { mimeType, buffer } = decodeDataUri(dataUri);
   const format = detectFormat(fileName, declaredMimeType?.toLowerCase() || mimeType);
   let extractedText = '';
   let aiDataUri = dataUri;
 
   if (format === 'pdf') {
-    try {
-      extractedText = await extractPdfText(buffer);
-    } catch {
-      extractedText = '';
+    extractedText = cleanText(clientPdf?.text || '');
+    if (!extractedText) {
+      try {
+        extractedText = await extractPdfText(buffer);
+      } catch {
+        extractedText = '';
+      }
     }
     // Text PDFs use their extracted text. Scanned PDFs are rendered page-by-page for real vision OCR.
     if (extractedText.length > 40) aiDataUri = textDataUri(extractedText);
@@ -168,11 +176,16 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
   const isScannedPdf = format === 'pdf' && extractedText.length <= 40;
   let pdfPageImages: string[] = [];
   if (isScannedPdf) {
-    try {
-      pdfPageImages = await renderPdfPagesToImages(buffer);
-    } catch {
-      throw new DocumentInputError('This PDF appears to be damaged or unreadable. Export it again or upload a clearer PDF/image.', 'invalid-data-uri');
+    if (clientPdf?.pageImages?.length) {
+      pdfPageImages = clientPdf.pageImages.filter((image) => image.startsWith('data:image/')).slice(0, 8);
+    } else {
+      try {
+        pdfPageImages = await renderPdfPagesToImages(buffer);
+      } catch {
+        throw new DocumentInputError('This PDF appears to be damaged or unreadable. Export it again or upload a clearer PDF/image.', 'invalid-data-uri');
+      }
     }
+    if (!pdfPageImages.length) throw new DocumentInputError('This PDF appears to be damaged or unreadable. Export it again or upload a clearer PDF/image.', 'invalid-data-uri');
   }
   return {
     format,

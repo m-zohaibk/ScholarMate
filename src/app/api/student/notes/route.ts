@@ -6,7 +6,7 @@ import { ocrRenderedPdfPages } from '@/lib/scanned-pdf-ocr';
 export async function POST(request: Request) {
   try {
     const input = await request.json();
-    const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType);
+    const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });
     const ocrText = document.isScannedPdf ? await ocrRenderedPdfPages(document.pdfPageImages) : '';
     if (document.isScannedPdf && !ocrText) return NextResponse.json({ error: 'No readable text was found in the scanned PDF. Upload a higher-resolution scan or a clearer image.' }, { status: 422 });
     const result = await generateStructuredNotes({ ...input, studyMaterialDataUri: document.aiDataUri, studyMaterialText: ocrText || document.extractedText || undefined, documentFormat: document.format });

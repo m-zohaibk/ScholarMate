@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getNotes, makeId, saveNote, type StoredNote } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
+import { preparePdfForUpload } from '@/lib/browser-pdf';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
   return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
@@ -22,6 +23,8 @@ export default function StudentNotesGenerator() {
   const [loading, setLoading] = useState(false);
   const [fileData, setFileData] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [pdfText, setPdfText] = useState('');
+  const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
   const [detailLevel, setDetailLevel] = useState<'summary' | 'detailed'>('detailed');
   const [notes, setNotes] = useState<StoredNote | null>(null);
   const [savedNotes, setSavedNotes] = useState<StoredNote[]>([]);
@@ -43,11 +46,12 @@ export default function StudentNotesGenerator() {
     }).catch(() => undefined);
   }, [firestore, isUserLoading, user]);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     const extension = file.name.split('.').pop()?.toLowerCase();
-    const supported = file.type.startsWith('image/') || file.type === 'application/pdf' || extension === 'docx' || extension === 'pptx';
+    const isPdf = file.type === 'application/pdf' || extension === 'pdf';
+    const supported = file.type.startsWith('image/') || isPdf || extension === 'docx' || extension === 'pptx';
     if (!supported) {
       toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
       return;
@@ -57,10 +61,25 @@ export default function StudentNotesGenerator() {
       return;
     }
     setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => setFileData(typeof reader.result === 'string' ? reader.result : null);
-    reader.onerror = () => toast({ title: 'Could not read file', description: 'Please choose the file again.', variant: 'destructive' });
-    reader.readAsDataURL(file);
+    setPdfText('');
+    setPdfPageImages([]);
+    try {
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read file.'));
+        reader.onerror = () => reject(new Error('Could not read file.'));
+        reader.readAsDataURL(file);
+      });
+      setFileData(dataUri);
+      if (isPdf) {
+        const prepared = await preparePdfForUpload(file);
+        setPdfText(prepared.text);
+        setPdfPageImages(prepared.pageImages);
+      }
+    } catch (error) {
+      setFileData(null);
+      toast({ title: 'Could not read file', description: error instanceof Error ? error.message : 'Please choose the file again.', variant: 'destructive' });
+    }
   };
 
   const handleGenerate = async () => {
@@ -69,8 +88,9 @@ export default function StudentNotesGenerator() {
       return;
     }
     setLoading(true);
+    const preparedPdf = pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData;
     try {
-      const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: fileData, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, detailLevel }) });
+      const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, detailLevel, studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined }) });
       const payload = await response.json() as { error?: string } & StudentStructuredNotesOutput;
       if (!response.ok) throw new Error(payload.error || 'The document could not be analyzed.');
       const result = payload;
