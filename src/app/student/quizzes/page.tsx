@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { getQuizzes, makeId, saveAttempt, saveQuiz, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
-import { preparePdfForUpload } from '@/lib/browser-pdf';
+import { MAX_GENERATION_REQUEST_BYTES, preparePdfForUpload } from '@/lib/browser-pdf';
+import { parseApiResponse } from '@/lib/api-response';
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
@@ -44,6 +45,9 @@ export default function StudentQuizCenter() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [pdfText, setPdfText] = useState('');
   const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
+  const [pdfTotalPages, setPdfTotalPages] = useState(0);
+  const [pdfRenderedPages, setPdfRenderedPages] = useState(0);
+  const [pdfTruncated, setPdfTruncated] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Quiz taking state
@@ -70,6 +74,9 @@ export default function StudentQuizCenter() {
     setFileName(file.name);
     setPdfText('');
     setPdfPageImages([]);
+    setPdfTotalPages(0);
+    setPdfRenderedPages(0);
+    setPdfTruncated(false);
     try {
       const dataUri = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -82,6 +89,9 @@ export default function StudentQuizCenter() {
         const prepared = await preparePdfForUpload(file);
         setPdfText(prepared.text);
         setPdfPageImages(prepared.pageImages);
+        setPdfTotalPages(prepared.totalPages);
+        setPdfRenderedPages(prepared.renderedPages);
+        setPdfTruncated(prepared.truncated);
       }
     } catch (error) {
       setFileData(null);
@@ -115,9 +125,13 @@ export default function StudentQuizCenter() {
     const preparedPdf = pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData;
 
     try {
-      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined }) });
-      const payload = await response.json() as { error?: string } & StudentQuizGenerationOutput;
-      if (!response.ok) throw new Error(payload.error || 'The document could not be analyzed.');
+      const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
+      const requestBytes = new TextEncoder().encode(requestBody).byteLength;
+      if (requestBytes > MAX_GENERATION_REQUEST_BYTES) {
+        throw new Error('This document is too large to send safely. Use a smaller or lower-resolution file, or fewer scanned pages.');
+      }
+      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
+      const payload = await parseApiResponse<StudentQuizGenerationOutput>(response);
       const result = payload;
       const generatedId = makeId('student-quiz');
       setQuizId(generatedId);
@@ -200,7 +214,7 @@ export default function StudentQuizCenter() {
                   <Upload className="w-4 h-4 mr-2" />
                   {fileName || "Upload PDF, image, DOCX, or PPTX"}
                 </Button>
-                <p className="text-xs text-muted-foreground">Scanned PDFs use the first 14 pages for OCR to stay within the 15-request-per-minute limit.</p>
+                <p className="text-xs text-muted-foreground">{pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs are rendered in your browser and processed sequentially to stay within AI request limits.'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
