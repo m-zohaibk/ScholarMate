@@ -200,6 +200,7 @@ export default function StudentQuizCenter() {
                   <Upload className="w-4 h-4 mr-2" />
                   {fileName || "Upload PDF, image, DOCX, or PPTX"}
                 </Button>
+                <p className="text-xs text-muted-foreground">Scanned PDFs use the first 4 pages for OCR to stay within free AI rate limits.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
