@@ -23,6 +23,7 @@ const StudentQuizGenerationInputSchema = z.object({
     .describe('Optional array of topics or keywords to focus the quiz questions on.'),
   studyMaterialText: z.string().optional().describe('Text extracted from a DOCX, PPTX, or text-based PDF.'),
   documentFormat: z.string().optional().describe('The uploaded document format.'),
+  mediaContentType: z.string().optional().describe('The MIME type for a non-data-URI media reference, such as application/pdf for a Gemini Files API URI.'),
 });
 export type StudentQuizGenerationInput = z.infer<typeof StudentQuizGenerationInputSchema>;
 
@@ -78,7 +79,7 @@ Cover the most important concepts throughout the material.
 Extracted Study Material Text:
 {{{studyMaterialText}}}
 {{else}}
-Study Material: {{media url=studyMaterialDataUri}}
+Study Material: {{media url=studyMaterialDataUri contentType=mediaContentType}}
 {{/if}}
 
 Instructions:

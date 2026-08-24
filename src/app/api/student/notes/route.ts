@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   try {
     const input = await request.json();
     if (isGeminiPdfUri(input.studyMaterialDataUri)) {
-      const result = await generateStructuredNotes({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf' });
+      const result = await generateStructuredNotes({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf', mediaContentType: 'application/pdf' });
       return NextResponse.json({ ...result, documentFormat: 'pdf', isScannedPdf: true, ocrPages: 0, usedGeminiFile: true });
     }
     const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });

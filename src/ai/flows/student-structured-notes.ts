@@ -20,6 +20,7 @@ const StudentStructuredNotesInputSchema = z.object({
   keywordsToFocus: z.array(z.string()).optional().describe('Optional keywords or topics to focus on when generating notes.'),
   studyMaterialText: z.string().optional().describe('Text extracted from a DOCX, PPTX, or text-based PDF. Use this instead of media when available.'),
   documentFormat: z.string().optional().describe('The uploaded document format.'),
+  mediaContentType: z.string().optional().describe('The MIME type for a non-data-URI media reference, such as application/pdf for a Gemini Files API URI.'),
 });
 export type StudentStructuredNotesInput = z.infer<typeof StudentStructuredNotesInputSchema>;
 
@@ -67,7 +68,7 @@ Instructions:
 Extracted Study Material Text:
 {{{studyMaterialText}}}
 {{else}}
-Study Material: {{media url=studyMaterialDataUri}}
+Study Material: {{media url=studyMaterialDataUri contentType=mediaContentType}}
 {{/if}}
 
 {{#if keywordsToFocus}}
