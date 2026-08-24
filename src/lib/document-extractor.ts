@@ -61,7 +61,7 @@ async function withTempPdf<T>(buffer: Buffer, callback: (pdfPath: string, tempDi
   }
 }
 
-export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 4) {
+export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 14) {
   return withTempPdf(buffer, async (pdfPath, tempDir) => {
     const prefix = `${tempDir}/page`;
     await execFileAsync('pdftoppm', ['-png', '-r', '160', '-f', '1', '-l', String(maxPages), pdfPath, prefix]);
@@ -177,7 +177,7 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
   let pdfPageImages: string[] = [];
   if (isScannedPdf) {
     if (clientPdf?.pageImages?.length) {
-      pdfPageImages = clientPdf.pageImages.filter((image) => image.startsWith('data:image/')).slice(0, 4);
+      pdfPageImages = clientPdf.pageImages.filter((image) => image.startsWith('data:image/')).slice(0, 14);
     } else {
       try {
         pdfPageImages = await renderPdfPagesToImages(buffer);

@@ -1,6 +1,6 @@
 'use client';
 
-const MAX_OCR_PAGES = 4;
+const MAX_OCR_PAGES = 14;
 const MAX_RENDER_WIDTH = 1400;
 const JPEG_QUALITY = 0.78;
 
