@@ -6,8 +6,7 @@ export function getGoogleAiConfigurationError() {
   if (!configuredKey) {
     return 'Google AI is not configured. Add a valid Google AI Studio API key as GOOGLE_GENAI_API_KEY in the Vercel Production environment, then redeploy.';
   }
-  if (/^(AQ\.|ya29\.|eyJ|1\/)/.test(configuredKey)) {
-    return 'Google AI is configured with an OAuth/session token, not an AI Studio API key. Replace it with a Google AI Studio API key in GOOGLE_GENAI_API_KEY and redeploy.';
-  }
+  // Google AI Studio now creates authorization keys with newer prefixes such as AQ.Ab.
+  // Do not classify credentials by prefix; let the Gemini API return the authoritative result.
   return null;
 }
