@@ -21,9 +21,6 @@ export async function POST(request: Request) {
           tokenPayload: JSON.stringify({ purpose: 'scholarmate-gemini-pdf' }),
         };
       },
-      onUploadCompleted: async () => {
-        // Gemini ingestion is triggered by the browser after the Blob upload completes.
-      },
     });
     return NextResponse.json(jsonResponse);
   } catch (error) {
