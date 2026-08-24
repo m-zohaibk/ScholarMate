@@ -17,7 +17,7 @@ export async function uploadPdfForGemini(file: File): Promise<GeminiPdfUploadRes
   }
 
   const blob = await upload(`scholarmate-pdfs/${file.name}`, file, {
-    access: 'public',
+    access: 'private',
     contentType: 'application/pdf',
     multipart: true,
     handleUploadUrl: '/api/documents/blob-upload',
