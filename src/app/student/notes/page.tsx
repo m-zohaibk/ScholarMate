@@ -85,10 +85,13 @@ export default function StudentNotesGenerator() {
       if (isPdf) {
         if (file.size <= MAX_GEMINI_APP_FILE_BYTES) {
           try {
+            console.log('[PDF upload] Files API path started:', { fileName: file.name, sizeBytes: file.size });
             const uploaded = await uploadPdfForGemini(file);
+            console.log('[PDF upload] Files API path completed:', { fileName: uploaded.fileName, state: uploaded.state, hasFileUri: Boolean(uploaded.fileUri) });
             setGeminiFileUri(uploaded.fileUri);
             return;
-          } catch {
+          } catch (error) {
+            console.error('[PDF upload] Files API path failed; using browser OCR fallback:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
             // Fall back to browser PDF.js rendering if the Files API upload is unavailable.
           }
         }

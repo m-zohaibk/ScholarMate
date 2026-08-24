@@ -6,6 +6,7 @@ export type GeminiPdfUploadResult = {
   fileUri: string;
   fileName: string;
   mimeType: string;
+  state: 'STATE_UNSPECIFIED' | 'PROCESSING' | 'ACTIVE' | 'FAILED';
 };
 
 type GeminiIngestionResponse = GeminiPdfUploadResult;
