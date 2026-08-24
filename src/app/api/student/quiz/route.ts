@@ -14,7 +14,9 @@ export async function POST(request: Request) {
   try {
     const input = await request.json();
     if (isGeminiPdfUri(input.studyMaterialDataUri)) {
+      console.log('[API] Student quiz Gemini file generation started:', { fileName: input.fileName, hasFileUri: true, mediaContentType: 'application/pdf' });
       const result = await generateStudentQuiz({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf', mediaContentType: 'application/pdf' });
+      console.log('[API] Student quiz Gemini file generation completed:', { fileName: input.fileName });
       return NextResponse.json({ ...result, documentFormat: 'pdf', isScannedPdf: true, ocrPages: 0, usedGeminiFile: true });
     }
     const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...result, documentFormat: document.format, isScannedPdf: document.isScannedPdf, ocrPages: document.pdfPageImages.length });
   } catch (error) {
     if (error instanceof DocumentInputError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422 });
-    console.error('[API] Student quiz generation failed:', error);
+    console.error('[API] Student quiz generation failed:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
     const providerMessage = String((error as { originalMessage?: unknown })?.originalMessage || error);
     if (providerMessage.includes('401 Unauthorized')) return NextResponse.json({ error: 'Google AI authentication failed. Use a Google AI Studio API key in GOOGLE_GENAI_API_KEY, not an OAuth token.' }, { status: 503 });
     if (providerMessage.includes('429')) return NextResponse.json({ error: 'Google AI rate limit reached. Wait a moment and try again.' }, { status: 429 });
