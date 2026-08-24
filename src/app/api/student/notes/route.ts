@@ -4,11 +4,19 @@ import { DocumentInputError, normalizeDocument } from '@/lib/document-extractor'
 import { ocrRenderedPdfPages } from '@/lib/scanned-pdf-ocr';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
+function isGeminiPdfUri(value: unknown): value is string {
+  return typeof value === 'string' && /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-z0-9-]+$/i.test(value);
+}
+
 export async function POST(request: Request) {
   const configurationError = getGoogleAiConfigurationError();
   if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });
   try {
     const input = await request.json();
+    if (isGeminiPdfUri(input.studyMaterialDataUri)) {
+      const result = await generateStructuredNotes({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf' });
+      return NextResponse.json({ ...result, documentFormat: 'pdf', isScannedPdf: true, ocrPages: 0, usedGeminiFile: true });
+    }
     const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });
     const ocrText = document.isScannedPdf ? await ocrRenderedPdfPages(document.pdfPageImages) : '';
     if (document.isScannedPdf && !ocrText) return NextResponse.json({ error: 'No readable text was found in the scanned PDF. Upload a higher-resolution scan or a clearer image.' }, { status: 422 });

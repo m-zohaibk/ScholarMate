@@ -14,7 +14,7 @@ const StudentStructuredNotesInputSchema = z.object({
   studyMaterialDataUri: z
     .string()
     .describe(
-      'A data URI of the study material (PDF, PPTX, Image) that must include a MIME type and use Base64 encoding.'
+      'The study material as either an inline MIME/Base64 data URI or an ACTIVE Gemini Files API URI for a PDF.'
     ),
   detailLevel: z.enum(['summary', 'detailed']).default('detailed').describe('Level of detail for the notes: "summary" or "detailed".'),
   keywordsToFocus: z.array(z.string()).optional().describe('Optional keywords or topics to focus on when generating notes.'),

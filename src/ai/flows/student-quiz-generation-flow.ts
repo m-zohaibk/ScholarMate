@@ -10,7 +10,7 @@ const StudentQuizGenerationInputSchema = z.object({
   studyMaterialDataUri: z
     .string()
     .describe(
-      "A data URI of the student's study material (PDF, PPTX, DOCX, or Image) that must include a MIME type and use Base64 encoding."
+      "The student's study material as either an inline MIME/Base64 data URI or an ACTIVE Gemini Files API URI for a PDF."
     ),
   questionTypes: z
     .array(z.enum(['MCQ', 'Short Answer', 'Conceptual/Scenario-based']))

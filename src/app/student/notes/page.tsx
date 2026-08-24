@@ -13,6 +13,8 @@ import { useFirebase } from '@/firebase';
 import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
 import { MAX_GENERATION_REQUEST_BYTES, preparePdfForUpload } from '@/lib/browser-pdf';
 import { parseApiResponse } from '@/lib/api-response';
+import { uploadPdfForGemini } from '@/lib/gemini-file-client';
+import { MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES } from '@/lib/document-upload-limits';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
   return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
@@ -29,6 +31,7 @@ export default function StudentNotesGenerator() {
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfRenderedPages, setPdfRenderedPages] = useState(0);
   const [pdfTruncated, setPdfTruncated] = useState(false);
+  const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
   const [detailLevel, setDetailLevel] = useState<'summary' | 'detailed'>('detailed');
   const [notes, setNotes] = useState<StoredNote | null>(null);
   const [savedNotes, setSavedNotes] = useState<StoredNote[]>([]);
@@ -70,6 +73,7 @@ export default function StudentNotesGenerator() {
     setPdfTotalPages(0);
     setPdfRenderedPages(0);
     setPdfTruncated(false);
+    setGeminiFileUri(null);
     try {
       const dataUri = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -79,6 +83,15 @@ export default function StudentNotesGenerator() {
       });
       setFileData(dataUri);
       if (isPdf) {
+        if (file.size <= MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES) {
+          try {
+            const uploaded = await uploadPdfForGemini(file);
+            setGeminiFileUri(uploaded.fileUri);
+            return;
+          } catch {
+            // Fall back to browser PDF.js rendering if the Files API upload is unavailable.
+          }
+        }
         const prepared = await preparePdfForUpload(file);
         setPdfText(prepared.text);
         setPdfPageImages(prepared.pageImages);
@@ -98,7 +111,7 @@ export default function StudentNotesGenerator() {
       return;
     }
     setLoading(true);
-    const preparedPdf = pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData;
+    const preparedPdf = geminiFileUri || (pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData);
     try {
       const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, detailLevel, studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
       const requestBytes = new TextEncoder().encode(requestBody).byteLength;
@@ -145,7 +158,7 @@ export default function StudentNotesGenerator() {
     <div className="max-w-5xl mx-auto space-y-8">
     <div><h1 className="font-headline text-3xl font-bold">AI Structured Notes</h1><p className="text-muted-foreground">Transform complex materials into clear, organized study notes.</p></div>
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div className="lg:col-span-5 space-y-6"><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="w-5 h-5 text-primary" />Input Material</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="notes-upload">Study Document (PDF, Image, DOCX, or PPTX)</Label><input id="notes-upload" type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" /><button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-muted/50 transition-colors"><Upload className="w-8 h-8 text-muted-foreground" /><span className="text-center"><span className="font-medium block">{fileName || 'Click to upload document'}</span><span className="text-xs text-muted-foreground mt-1 block">PDF, images, DOCX, or PPTX up to 10MB</span><span className="text-xs text-muted-foreground mt-1 block">{pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs are rendered in your browser and processed sequentially to stay within AI request limits.'}</span></span></button></div><div className="space-y-3"><Label>Detail Level</Label><Tabs value={detailLevel} onValueChange={(value) => setDetailLevel(value as 'summary' | 'detailed')} className="w-full"><TabsList className="grid w-full grid-cols-2 bg-muted/50"><TabsTrigger value="summary">Summary</TabsTrigger><TabsTrigger value="detailed">Detailed</TabsTrigger></TabsList></Tabs></div><Button className="w-full h-12 text-lg font-headline bg-accent hover:bg-accent/90" disabled={loading || !fileData} onClick={() => void handleGenerate()}>{loading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Analyzing Document...</> : <><Sparkles className="w-5 h-5 mr-2" />Generate Notes</>}</Button></CardContent></Card><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5 text-primary" />Saved Notes</CardTitle></CardHeader><CardContent className="space-y-2">{savedNotes.length ? savedNotes.slice(0, 5).map((item) => <button key={item.id} type="button" onClick={() => setNotes(item)} className="w-full text-left rounded-lg border p-3 hover:border-primary/40 hover:bg-primary/5"><p className="font-medium truncate">{item.title}</p><p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()} · {item.sourceName}</p></button>) : <p className="text-sm text-muted-foreground">Generated notes will appear here.</p>}</CardContent></Card></div>
+      <div className="lg:col-span-5 space-y-6"><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="w-5 h-5 text-primary" />Input Material</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="notes-upload">Study Document (PDF, Image, DOCX, or PPTX)</Label><input id="notes-upload" type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" /><button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-muted/50 transition-colors"><Upload className="w-8 h-8 text-muted-foreground" /><span className="text-center"><span className="font-medium block">{fileName || 'Click to upload document'}</span><span className="text-xs text-muted-foreground mt-1 block">PDF, images, DOCX, or PPTX up to 10MB</span><span className="text-xs text-muted-foreground mt-1 block">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</span></span></button></div><div className="space-y-3"><Label>Detail Level</Label><Tabs value={detailLevel} onValueChange={(value) => setDetailLevel(value as 'summary' | 'detailed')} className="w-full"><TabsList className="grid w-full grid-cols-2 bg-muted/50"><TabsTrigger value="summary">Summary</TabsTrigger><TabsTrigger value="detailed">Detailed</TabsTrigger></TabsList></Tabs></div><Button className="w-full h-12 text-lg font-headline bg-accent hover:bg-accent/90" disabled={loading || !fileData} onClick={() => void handleGenerate()}>{loading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Analyzing Document...</> : <><Sparkles className="w-5 h-5 mr-2" />Generate Notes</>}</Button></CardContent></Card><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5 text-primary" />Saved Notes</CardTitle></CardHeader><CardContent className="space-y-2">{savedNotes.length ? savedNotes.slice(0, 5).map((item) => <button key={item.id} type="button" onClick={() => setNotes(item)} className="w-full text-left rounded-lg border p-3 hover:border-primary/40 hover:bg-primary/5"><p className="font-medium truncate">{item.title}</p><p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()} · {item.sourceName}</p></button>) : <p className="text-sm text-muted-foreground">Generated notes will appear here.</p>}</CardContent></Card></div>
       <div className="lg:col-span-7">{!notes ? <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8 bg-white/40 rounded-3xl border border-dashed"><div className="bg-muted p-6 rounded-full mb-4"><ListTree className="w-12 h-12 text-muted-foreground" /></div><h3 className="font-headline text-xl font-bold text-muted-foreground">No Notes Yet</h3><p className="text-muted-foreground max-w-xs mx-auto mt-2">Upload your document on the left to generate structured notes using Vision AI.</p></div> : <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500"><div className="flex justify-between items-center mb-4 gap-4"><div><h2 className="font-headline text-2xl font-bold text-primary">{notes.title}</h2><p className="text-xs text-muted-foreground">From {notes.sourceName}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" className="rounded-full" onClick={copyNotes} aria-label="Copy notes"><Copy className="w-4 h-4" /></Button><Button variant="outline" size="icon" className="rounded-full" onClick={downloadNotes} aria-label="Download notes"><Download className="w-4 h-4" /></Button></div></div><Card className="border-none shadow-sm overflow-hidden"><CardHeader className="bg-primary/5 py-4"><div className="flex items-center gap-2 text-primary"><Highlighter className="w-4 h-4" /><span className="font-bold text-xs uppercase tracking-wider">Executive Summary</span></div></CardHeader><CardContent className="pt-4 text-muted-foreground leading-relaxed text-sm">{notes.summary}</CardContent></Card>{notes.sections.map((section) => <div key={section.heading} className="space-y-4"><h3 className="font-headline text-xl font-bold border-b pb-2 text-foreground">{section.heading}</h3><div className="grid gap-4">{section.subsections.map((subsection) => <Card key={subsection.subheading} className="border-none shadow-sm bg-white"><CardHeader className="py-4"><CardTitle className="text-base font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader><CardContent className="pt-0"><ul className="space-y-3">{subsection.points.map((point) => <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" /><span>{point}</span></li>)}</ul></CardContent></Card>)}</div></div>)}</div>}</div>
     </div>
     </div>

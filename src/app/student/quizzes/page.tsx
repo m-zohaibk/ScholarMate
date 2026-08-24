@@ -16,6 +16,8 @@ import { useFirebase } from '@/firebase';
 import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
 import { MAX_GENERATION_REQUEST_BYTES, preparePdfForUpload } from '@/lib/browser-pdf';
 import { parseApiResponse } from '@/lib/api-response';
+import { uploadPdfForGemini } from '@/lib/gemini-file-client';
+import { MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES } from '@/lib/document-upload-limits';
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
@@ -48,6 +50,7 @@ export default function StudentQuizCenter() {
   const [pdfTotalPages, setPdfTotalPages] = useState(0);
   const [pdfRenderedPages, setPdfRenderedPages] = useState(0);
   const [pdfTruncated, setPdfTruncated] = useState(false);
+  const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Quiz taking state
@@ -77,6 +80,7 @@ export default function StudentQuizCenter() {
     setPdfTotalPages(0);
     setPdfRenderedPages(0);
     setPdfTruncated(false);
+    setGeminiFileUri(null);
     try {
       const dataUri = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -86,6 +90,15 @@ export default function StudentQuizCenter() {
       });
       setFileData(dataUri);
       if (isPdf) {
+        if (file.size <= MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES) {
+          try {
+            const uploaded = await uploadPdfForGemini(file);
+            setGeminiFileUri(uploaded.fileUri);
+            return;
+          } catch {
+            // Fall back to browser PDF.js rendering if the Files API upload is unavailable.
+          }
+        }
         const prepared = await preparePdfForUpload(file);
         setPdfText(prepared.text);
         setPdfPageImages(prepared.pageImages);
@@ -122,7 +135,7 @@ export default function StudentQuizCenter() {
     setUserAnswers({});
     setCheckedAnswers({});
     setScore(0);
-    const preparedPdf = pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData;
+    const preparedPdf = geminiFileUri || (pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData);
 
     try {
       const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
@@ -214,7 +227,7 @@ export default function StudentQuizCenter() {
                   <Upload className="w-4 h-4 mr-2" />
                   {fileName || "Upload PDF, image, DOCX, or PPTX"}
                 </Button>
-                <p className="text-xs text-muted-foreground">{pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs are rendered in your browser and processed sequentially to stay within AI request limits.'}</p>
+                <p className="text-xs text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
