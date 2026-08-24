@@ -1,7 +1,10 @@
+import { get } from '@vercel/blob';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
+
 const GEMINI_UPLOAD_URL = 'https://generativelanguage.googleapis.com/upload/v1beta/files';
 const GEMINI_FILES_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const MAX_STATUS_POLLS = 30;
 
 export class GeminiFileUploadError extends Error {
   status: number;
@@ -45,11 +48,12 @@ function validatePdfFileName(displayName: string) {
   return normalized.toLowerCase().endsWith('.pdf') ? normalized : `${normalized}.pdf`;
 }
 
-export async function createGeminiPdfUploadSession(sizeBytes: number, displayName: string) {
-  const apiKey = getApiKey();
-  if (!Number.isInteger(sizeBytes) || sizeBytes <= 0) throw new GeminiFileUploadError('The PDF size is invalid.', 422);
-  if (sizeBytes > MAX_GEMINI_APP_FILE_BYTES) throw new GeminiFileUploadError('Please upload a PDF smaller than 10MB.', 413);
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
+async function startGeminiPdfUpload(sizeBytes: number, displayName: string) {
+  const apiKey = getApiKey();
   const startResponse = await fetch(GEMINI_UPLOAD_URL, {
     method: 'POST',
     headers: {
@@ -65,15 +69,28 @@ export async function createGeminiPdfUploadSession(sizeBytes: number, displayNam
   if (!startResponse.ok) await readJson(startResponse, 'Gemini rejected the PDF upload session.');
   const uploadUrl = startResponse.headers.get('x-goog-upload-url');
   if (!uploadUrl) throw new GeminiFileUploadError('Gemini did not return a resumable upload URL.');
-
-  return { uploadUrl, fileName: validatePdfFileName(displayName), sizeBytes };
+  return uploadUrl;
 }
 
-export function isGeminiFileName(value: string) {
-  return /^files\/[a-z0-9-]+$/i.test(value);
+async function uploadBytesToGemini(uploadUrl: string, bytes: ArrayBuffer, sizeBytes: number) {
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(sizeBytes),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize',
+      'Content-Type': 'application/pdf',
+    },
+    body: bytes,
+  });
+  if (!response.ok) await readJson(response, 'Gemini rejected the PDF bytes.');
+  const payload = await readJson(response, 'Gemini returned an invalid PDF upload response.') as GeminiFile & { file?: GeminiFile };
+  const file = payload.file || payload;
+  if (!file.name) throw new GeminiFileUploadError('Gemini did not return a file name after upload.');
+  return file.name;
 }
 
-export async function getGeminiPdfStatus(name: string) {
+async function getGeminiPdfStatusByName(name: string) {
   const apiKey = getApiKey();
   if (!isGeminiFileName(name)) throw new GeminiFileUploadError('The Gemini file reference is invalid.', 422);
   const response = await fetch(`${GEMINI_FILES_URL}/${name}`, { headers: { 'x-goog-api-key': apiKey } });
@@ -82,4 +99,34 @@ export async function getGeminiPdfStatus(name: string) {
   if (file.state === 'FAILED') throw new GeminiFileUploadError(file.error?.message || 'Gemini could not process this PDF.');
   if (!file.uri || !file.name) throw new GeminiFileUploadError('Gemini did not return a usable PDF file reference.');
   return { fileUri: file.uri, fileName: file.name, mimeType: file.mimeType || 'application/pdf', state: file.state || 'STATE_UNSPECIFIED' };
+}
+
+export async function uploadGeminiPdfFromBlob(pathname: string, sizeBytes: number, displayName: string) {
+  if (!pathname || pathname.includes('..') || pathname.startsWith('/')) throw new GeminiFileUploadError('The uploaded PDF reference is invalid.', 422);
+  if (!Number.isInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_GEMINI_APP_FILE_BYTES) {
+    throw new GeminiFileUploadError('Please upload a PDF smaller than 10MB.', 413);
+  }
+
+  const blob = await get(pathname, { access: 'private', useCache: false });
+  if (!blob || blob.statusCode !== 200 || !blob.stream) throw new GeminiFileUploadError('The uploaded PDF could not be retrieved from private storage.', 404);
+  const actualSize = blob.blob.size ?? sizeBytes;
+  if (actualSize > MAX_GEMINI_APP_FILE_BYTES) throw new GeminiFileUploadError('Please upload a PDF smaller than 10MB.', 413);
+  const bytes = await new Response(blob.stream).arrayBuffer();
+  const uploadUrl = await startGeminiPdfUpload(bytes.byteLength, displayName);
+  const fileName = await uploadBytesToGemini(uploadUrl, bytes, bytes.byteLength);
+
+  for (let attempt = 0; attempt < MAX_STATUS_POLLS; attempt += 1) {
+    const status = await getGeminiPdfStatusByName(fileName);
+    if (status.state === 'ACTIVE') return status;
+    await sleep(500);
+  }
+  throw new GeminiFileUploadError('Gemini is still processing this PDF. Please try again in a moment.', 504);
+}
+
+export function isGeminiFileName(value: string) {
+  return /^files\/[a-z0-9-]+$/i.test(value);
+}
+
+export async function getGeminiPdfStatus(name: string) {
+  return getGeminiPdfStatusByName(name);
 }
