@@ -114,7 +114,7 @@ export async function uploadGeminiPdfFromBlob(pathname: string, sizeBytes: numbe
   }
 
   console.log('[Gemini PDF] Blob download started:', { pathname, expectedSizeBytes: sizeBytes });
-  const blob = await get(pathname, { access: 'private', useCache: false });
+  const blob = await get(pathname, { access: 'public', useCache: false });
   console.log('[Gemini PDF] Blob lookup completed:', { statusCode: blob?.statusCode, hasStream: Boolean(blob?.stream) });
   if (!blob || blob.statusCode !== 200 || !blob.stream) throw new GeminiFileUploadError('The uploaded PDF could not be retrieved from private storage.', 404);
   const actualSize = blob.blob.size ?? sizeBytes;
