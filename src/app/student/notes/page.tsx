@@ -14,7 +14,7 @@ import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
 import { MAX_GENERATION_REQUEST_BYTES, preparePdfForUpload } from '@/lib/browser-pdf';
 import { parseApiResponse } from '@/lib/api-response';
 import { uploadPdfForGemini } from '@/lib/gemini-file-client';
-import { MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES } from '@/lib/document-upload-limits';
+import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
   return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
@@ -83,7 +83,7 @@ export default function StudentNotesGenerator() {
       });
       setFileData(dataUri);
       if (isPdf) {
-        if (file.size <= MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES) {
+        if (file.size <= MAX_GEMINI_APP_FILE_BYTES) {
           try {
             const uploaded = await uploadPdfForGemini(file);
             setGeminiFileUri(uploaded.fileUri);

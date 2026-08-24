@@ -1,2 +1,2 @@
-/** Vercel Functions allow 4.5 MB request bodies; leave margin for headers and multipart/request metadata. */
-export const MAX_DIRECT_GEMINI_FILE_UPLOAD_BYTES = 4_000_000;
+/** The product accepts PDF uploads up to 10 MB, while larger Gemini Files API limits remain available for future storage-backed uploads. */
+export const MAX_GEMINI_APP_FILE_BYTES = 10 * 1024 * 1024;
