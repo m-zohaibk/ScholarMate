@@ -18,6 +18,8 @@ const pageOcrPrompt = ai.definePrompt({
 
 Transcribe the scanned page exactly and completely. Preserve headings, paragraphs, lists, equations, labels, and table content as readable plain text. Correct obvious OCR confusion only when the visual evidence is clear. Do not summarize, invent missing words, or omit handwritten content. For diagrams, include a concise textual description of labels and relationships. If a region is unreadable, write [illegible] rather than guessing.
 
+Return only one valid JSON object with a single text field. Do not wrap the response in Markdown fences, add commentary, or use trailing commas.
+
 Page number: {{{pageNumber}}}
 
 Page image:

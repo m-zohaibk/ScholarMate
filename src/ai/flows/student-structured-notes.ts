@@ -74,8 +74,11 @@ Study Material: {{media url=studyMaterialDataUri}}
 Focus Keywords/Topics: {{#each keywordsToFocus}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}.
 {{/if}}
 
-Detail Level: {{{detailLevel}}}
+  Detail Level: {{{detailLevel}}}
 If the detail level is summary, prioritize brevity, high-level themes, and core conclusions. If the detail level is detailed, include comprehensive details covering all significant points, definitions, and examples mentioned in the material.
+
+Return only one valid JSON object matching the output schema. Do not wrap it in Markdown fences, add commentary before or after it, or use trailing commas.
+
 `,
 });
 

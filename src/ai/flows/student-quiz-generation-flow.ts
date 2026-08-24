@@ -87,7 +87,7 @@ Instructions:
 3. Conceptual: Questions should test understanding, not just recall.
 4. ALWAYS provide an explanation that helps the student learn from their mistakes.
 
-Respond strictly in JSON format.`,
+Respond strictly as one valid JSON object matching the output schema. Do not wrap the response in Markdown fences, add commentary, or use trailing commas.`,
 });
 
 const studentQuizGenerationFlow = ai.defineFlow(
