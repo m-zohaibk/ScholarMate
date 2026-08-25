@@ -1,6 +1,5 @@
 import { upload } from '@vercel/blob/client';
 import { parseApiResponse } from '@/lib/api-response';
-import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
 
 export type GeminiPdfUploadResult = {
   fileUri: string;
@@ -12,10 +11,6 @@ export type GeminiPdfUploadResult = {
 type GeminiIngestionResponse = GeminiPdfUploadResult;
 
 export async function uploadPdfForGemini(file: File): Promise<GeminiPdfUploadResult> {
-  if (file.size > MAX_GEMINI_APP_FILE_BYTES) {
-    throw new Error('Please upload a PDF smaller than 10MB.');
-  }
-
   const blob = await upload(`scholarmate-pdfs/${file.name}`, file, {
     access: 'public',
     contentType: 'application/pdf',

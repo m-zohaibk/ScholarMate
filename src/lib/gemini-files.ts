@@ -1,6 +1,5 @@
 import { get } from '@vercel/blob';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
-import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
 
 const GEMINI_UPLOAD_URL = 'https://generativelanguage.googleapis.com/upload/v1beta/files';
 const GEMINI_FILES_URL = 'https://generativelanguage.googleapis.com/v1beta';
@@ -109,10 +108,6 @@ async function getGeminiPdfStatusByName(name: string) {
 
 export async function uploadGeminiPdfFromBlob(pathname: string, sizeBytes: number, displayName: string) {
   if (!pathname || pathname.includes('..') || pathname.startsWith('/')) throw new GeminiFileUploadError('The uploaded PDF reference is invalid.', 422);
-  if (!Number.isInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_GEMINI_APP_FILE_BYTES) {
-    throw new GeminiFileUploadError('Please upload a PDF smaller than 10MB.', 413);
-  }
-
   console.log('[Gemini PDF] Blob download started:', { pathname, expectedSizeBytes: sizeBytes });
   const blob = await get(pathname, { access: 'public', useCache: false });
   console.log('[Gemini PDF] Blob lookup completed:', { statusCode: blob?.statusCode, hasStream: Boolean(blob?.stream) });
@@ -120,7 +115,6 @@ export async function uploadGeminiPdfFromBlob(pathname: string, sizeBytes: numbe
   const actualSize = blob.blob.size ?? sizeBytes;
   const contentType = blob.blob.contentType || blob.headers.get('content-type') || 'unknown';
   console.log('[Gemini PDF] Blob metadata:', { sizeBytes: actualSize, contentType });
-  if (actualSize > MAX_GEMINI_APP_FILE_BYTES) throw new GeminiFileUploadError('Please upload a PDF smaller than 10MB.', 413);
   const bytes = await new Response(blob.stream).arrayBuffer();
   console.log('[Gemini PDF] Blob bytes downloaded:', { sizeBytes: bytes.byteLength, contentType });
   const uploadUrl = await startGeminiPdfUpload(bytes.byteLength, displayName);

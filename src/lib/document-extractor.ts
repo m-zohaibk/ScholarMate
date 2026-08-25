@@ -23,7 +23,6 @@ function decodeDataUri(dataUri: string) {
     ? Buffer.from(payload, 'base64')
     : Buffer.from(decodeURIComponent(payload));
   if (!buffer.length) throw new DocumentInputError('The uploaded document is empty.', 'empty-document');
-  if (buffer.length > 12 * 1024 * 1024) throw new DocumentInputError('The uploaded document is larger than 12MB.', 'too-large');
   return { mimeType, buffer };
 }
 
@@ -61,10 +60,10 @@ async function withTempPdf<T>(buffer: Buffer, callback: (pdfPath: string, tempDi
   }
 }
 
-export async function renderPdfPagesToImages(buffer: Buffer, maxPages = 14) {
+export async function renderPdfPagesToImages(buffer: Buffer) {
   return withTempPdf(buffer, async (pdfPath, tempDir) => {
     const prefix = `${tempDir}/page`;
-    await execFileAsync('pdftoppm', ['-png', '-r', '160', '-f', '1', '-l', String(maxPages), pdfPath, prefix]);
+    await execFileAsync('pdftoppm', ['-png', '-r', '160', '-f', '1', pdfPath, prefix]);
     const names = (await readdir(tempDir))
       .filter((name) => /^page-\d+\.png$/i.test(name))
       .sort((a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0));
@@ -177,7 +176,7 @@ export async function normalizeDocument(dataUri: string, fileName?: string, decl
   let pdfPageImages: string[] = [];
   if (isScannedPdf) {
     if (clientPdf?.pageImages?.length) {
-      pdfPageImages = clientPdf.pageImages.filter((image) => image.startsWith('data:image/')).slice(0, 14);
+      pdfPageImages = clientPdf.pageImages.filter((image) => image.startsWith('data:image/'));
     } else {
       try {
         pdfPageImages = await renderPdfPagesToImages(buffer);

@@ -15,7 +15,8 @@ const QuestionTypeSchema = z.enum(['MCQ', 'short-answer', 'conceptual']);
 const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
 
 const GenerateTeacherQuizInputSchema = z.object({
-  syllabusOrTopics: z.string().describe('The syllabus or list of topics to generate the quiz from.'),
+  syllabusOrTopics: z.string().optional().describe('The syllabus or list of topics to generate the quiz from.'),
+  syllabusFileUri: z.string().optional().describe('Optional Gemini Files API URI for the source PDF.'),
   questionTypes: z.array(QuestionTypeSchema).describe('The types of questions to include in the quiz (e.g., MCQ, short-answer, conceptual).'),
   difficulty: DifficultySchema.describe('The difficulty level for the quiz questions.'),
   includeKeywords: z.array(z.string()).optional().describe('Optional: Keywords that must be included in the quiz questions or answers.'),
@@ -45,7 +46,12 @@ const quizGeneratorPrompt = ai.definePrompt({
   name: 'teacherQuizGeneratorPrompt',
   input: { schema: GenerateTeacherQuizInputSchema },
   output: { schema: GenerateTeacherQuizOutputSchema },
-  prompt: `You are an expert educational quiz generator. Your task is to create a comprehensive quiz based on the provided syllabus or topics.\n\nSyllabus/Topics:\n{{{syllabusOrTopics}}}\n\nQuestion Types: {{{questionTypes}}}\nDifficulty Level: {{{difficulty}}}\nNumber of Questions: {{{numQuestions}}}\n\n{{#if includeKeywords}}\nEnsure the following keywords are included in the quiz: {{{includeKeywords}}}\n{{/if}}\n{{#if excludeKeywords}}\nEnsure the following keywords are explicitly excluded from the quiz: {{{excludeKeywords}}}\n{{/if}}\n\nGenerate a quiz with a clear title and description. Each question should be one of the specified types.\nFor 'MCQ' questions, provide 4 distinct options and clearly mark the 'correctAnswer'.\nFor 'short-answer' and 'conceptual' questions, provide a concise 'correctAnswer' and an optional 'explanation'.\n\nYour output MUST be a JSON object conforming to the following schema:\n`
+  prompt: `You are an expert educational quiz generator. Your task is to create a comprehensive quiz based on the provided syllabus or topics.\n\nSyllabus/Topics:
+{{{syllabusOrTopics}}}
+{{#if syllabusFileUri}}
+Source PDF:
+{{media url=syllabusFileUri contentType="application/pdf"}}
+{{/if}}\n\nQuestion Types: {{{questionTypes}}}\nDifficulty Level: {{{difficulty}}}\nNumber of Questions: {{{numQuestions}}}\n\n{{#if includeKeywords}}\nEnsure the following keywords are included in the quiz: {{{includeKeywords}}}\n{{/if}}\n{{#if excludeKeywords}}\nEnsure the following keywords are explicitly excluded from the quiz: {{{excludeKeywords}}}\n{{/if}}\n\nGenerate a quiz with a clear title and description. Each question should be one of the specified types.\nFor 'MCQ' questions, provide 4 distinct options and clearly mark the 'correctAnswer'.\nFor 'short-answer' and 'conceptual' questions, provide a concise 'correctAnswer' and an optional 'explanation'.\n\nYour output MUST be a JSON object conforming to the following schema:\n`
 });
 
 // Define the flow

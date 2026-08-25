@@ -1,6 +1,5 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextResponse } from 'next/server';
-import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +15,6 @@ export async function POST(request: Request) {
         }
         return {
           allowedContentTypes: ['application/pdf'],
-          maximumSizeInBytes: MAX_GEMINI_APP_FILE_BYTES,
           addRandomSuffix: true,
           tokenPayload: JSON.stringify({ purpose: 'scholarmate-gemini-pdf' }),
         };

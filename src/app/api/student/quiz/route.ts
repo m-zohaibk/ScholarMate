@@ -31,6 +31,6 @@ export async function POST(request: Request) {
     if (providerMessage.includes('401 Unauthorized')) return NextResponse.json({ error: 'Google AI authentication failed. Use a Google AI Studio API key in GOOGLE_GENAI_API_KEY, not an OAuth token.' }, { status: 503 });
     if (providerMessage.includes('429')) return NextResponse.json({ error: 'Google AI rate limit reached. Wait a moment and try again.' }, { status: 429 });
     if (/invalid json|json.*parse|parse.*json|schema validation/i.test(providerMessage.toLowerCase())) return NextResponse.json({ error: 'Gemini returned an invalid structured response. The PDF was accepted; wait a moment and try again.' }, { status: 502 });
-    return NextResponse.json({ error: 'The document could not be analyzed. Try a smaller, clearer file.' }, { status: 500 });
+    return NextResponse.json({ error: 'The document could not be analyzed. Check the document format and try again.' }, { status: 500 });
   }
 }

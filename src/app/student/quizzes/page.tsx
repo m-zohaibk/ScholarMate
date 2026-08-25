@@ -14,10 +14,9 @@ import { cn } from '@/lib/utils';
 import { getQuizzes, makeId, saveAttempt, saveQuiz, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
-import { MAX_GENERATION_REQUEST_BYTES, preparePdfForUpload } from '@/lib/browser-pdf';
+import { preparePdfForUpload } from '@/lib/browser-pdf';
 import { parseApiResponse } from '@/lib/api-response';
 import { uploadPdfForGemini } from '@/lib/gemini-file-client';
-import { MAX_GEMINI_APP_FILE_BYTES } from '@/lib/document-upload-limits';
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
@@ -70,10 +69,6 @@ export default function StudentQuizCenter() {
       toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'File too large', description: 'Please upload a file smaller than 10MB.', variant: 'destructive' });
-      return;
-    }
     setFileName(file.name);
     setPdfText('');
     setPdfPageImages([]);
@@ -90,17 +85,14 @@ export default function StudentQuizCenter() {
       });
       setFileData(dataUri);
       if (isPdf) {
-        if (file.size <= MAX_GEMINI_APP_FILE_BYTES) {
-          try {
-            console.log('[PDF upload] Files API path started:', { fileName: file.name, sizeBytes: file.size });
-            const uploaded = await uploadPdfForGemini(file);
-            console.log('[PDF upload] Files API path completed:', { fileName: uploaded.fileName, state: uploaded.state, hasFileUri: Boolean(uploaded.fileUri) });
-            setGeminiFileUri(uploaded.fileUri);
-            return;
-          } catch (error) {
-            console.error('[PDF upload] Files API path failed; using browser OCR fallback:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
-            // Fall back to browser PDF.js rendering if the Files API upload is unavailable.
-          }
+        try {
+          console.log('[PDF upload] Files API path started:', { fileName: file.name, sizeBytes: file.size });
+          const uploaded = await uploadPdfForGemini(file);
+          console.log('[PDF upload] Files API path completed:', { fileName: uploaded.fileName, state: uploaded.state, hasFileUri: Boolean(uploaded.fileUri) });
+          setGeminiFileUri(uploaded.fileUri);
+          return;
+        } catch (error) {
+          console.error('[PDF upload] Files API path failed; using browser OCR fallback:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
         }
         const prepared = await preparePdfForUpload(file);
         setPdfText(prepared.text);
@@ -142,10 +134,6 @@ export default function StudentQuizCenter() {
 
     try {
       const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
-      const requestBytes = new TextEncoder().encode(requestBody).byteLength;
-      if (requestBytes > MAX_GENERATION_REQUEST_BYTES) {
-        throw new Error('This document is too large to send safely. Use a smaller or lower-resolution file, or fewer scanned pages.');
-      }
       const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
       const payload = await parseApiResponse<StudentQuizGenerationOutput>(response);
       const result = payload;
@@ -228,7 +216,7 @@ export default function StudentQuizCenter() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {fileName || "Upload PDF, image, DOCX, or PPTX"}
+                  {fileName || "Upload PDF, images, DOCX, or PPTX with no application size limit"}
                 </Button>
                 <p className="text-xs text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</p>
               </div>

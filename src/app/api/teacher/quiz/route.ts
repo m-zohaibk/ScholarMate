@@ -2,11 +2,18 @@ import { NextResponse } from 'next/server';
 import { generateTeacherQuiz } from '@/ai/flows/teacher-quiz-generation';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
+function isGeminiPdfUri(value: unknown): value is string {
+  return typeof value === 'string' && /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-z0-9-]+$/i.test(value);
+}
+
 export async function POST(request: Request) {
   const configurationError = getGoogleAiConfigurationError();
   if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });
   try {
     const input = await request.json();
+    if (input.syllabusFileUri && !isGeminiPdfUri(input.syllabusFileUri)) {
+      return NextResponse.json({ error: 'The attached PDF reference is invalid.' }, { status: 422 });
+    }
     const result = await generateTeacherQuiz(input);
     return NextResponse.json(result);
   } catch (error) {
