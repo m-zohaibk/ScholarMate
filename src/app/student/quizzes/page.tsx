@@ -22,6 +22,7 @@ export default function StudentQuizCenter() {
   const { toast } = useToast();
   const { firestore, user, isUserLoading } = useFirebase();
   const [loading, setLoading] = useState(false);
+  const [pdfIngestionLoading, setPdfIngestionLoading] = useState(false);
   const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
   const [numQuestions, setNumQuestions] = useState(5);
   const [quiz, setQuiz] = useState<StudentQuizGenerationOutput | null>(null);
@@ -76,6 +77,7 @@ export default function StudentQuizCenter() {
     setPdfRenderedPages(0);
     setPdfTruncated(false);
     setGeminiFileUri(null);
+    setPdfIngestionLoading(isPdf);
     try {
       const dataUri = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -104,6 +106,8 @@ export default function StudentQuizCenter() {
     } catch (error) {
       setFileData(null);
       toast({ title: 'Could not read file', description: error instanceof Error ? error.message : 'Please choose the file again.', variant: 'destructive' });
+    } finally {
+      setPdfIngestionLoading(false);
     }
   };
 
@@ -120,6 +124,14 @@ export default function StudentQuizCenter() {
   const handleGenerate = async () => {
     if (!fileData) {
       toast({ title: "Document Required", description: "Please upload a study material file." });
+      return;
+    }
+    if (pdfIngestionLoading) {
+      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish uploading to Gemini Files API.' });
+      return;
+    }
+    if (fileName?.toLowerCase().endsWith('.pdf') && !geminiFileUri && !pdfText && !pdfPageImages.length) {
+      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading to Gemini before a Quiz can be generated.' });
       return;
     }
 
@@ -252,10 +264,12 @@ export default function StudentQuizCenter() {
 
               <Button 
                 className="w-full h-12 text-lg font-headline bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20" 
-                disabled={loading || !fileData}
+                disabled={loading || pdfIngestionLoading || !fileData}
                 onClick={() => void handleGenerate()}
               >
-                {loading ? (
+                {pdfIngestionLoading ? (
+                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Preparing PDF...</>
+                ) : loading ? (
                   <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Decoding Material...</>
                 ) : (
                   <><Sparkles className="w-5 h-5 mr-2" /> Generate Interactive Quiz</>
