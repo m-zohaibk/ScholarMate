@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const input = await request.json() as { pathname?: string; sizeBytes?: number; fileName?: string; mimeType?: string };
     if (input.mimeType !== 'application/pdf') {
-      return NextResponse.json({ error: 'Only PDF uploads are supported by the Gemini Files API path.' }, { status: 415 });
+      return NextResponse.json({ error: 'Only PDF uploads are supported by the secure cloud upload path.' }, { status: 415 });
     }
     const sizeBytes = Number(input.sizeBytes);
     const fileName = input.fileName || 'scholarmate-document.pdf';
@@ -21,6 +21,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('[API] Gemini PDF ingestion failed:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json({ error: 'The PDF could not be transferred to Gemini. Use the browser OCR fallback or try again.' }, { status: 502 });
+    return NextResponse.json({ error: 'The PDF could not be uploaded to the secure cloud. Try again or use the on-device OCR fallback.' }, { status: 502 });
   }
 }

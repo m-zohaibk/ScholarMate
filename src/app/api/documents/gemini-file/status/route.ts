@@ -13,6 +13,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error('[API] Gemini PDF status failed:', error);
-    return NextResponse.json({ error: 'The Gemini PDF status could not be checked. Please try again.' }, { status: 502 });
+    return NextResponse.json({ error: 'The PDF upload status could not be checked. Please try again.' }, { status: 502 });
   }
 }

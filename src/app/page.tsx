@@ -34,7 +34,7 @@ const FEATURES = [
   {
     icon: ScanText,
     title: 'Handwriting OCR',
-    desc: 'Gemini vision reads handwritten notes, textbook photos and complex PDFs, turning them into clean digital notes.',
+    desc: 'Advanced vision AI reads handwritten notes, textbook photos and complex PDFs, turning them into clean digital notes.',
     tint: 'bg-accent/10 text-accent',
   },
   {
@@ -65,7 +65,7 @@ const FEATURES = [
 
 const STEPS = [
   { n: '01', title: 'Upload material', desc: 'Drop in PDFs, photos of handwritten notes, DOCX or PPTX files — no size limits.' },
-  { n: '02', title: 'AI does the heavy lifting', desc: 'Gemini transcribes, summarizes and structures your content into study-ready notes.' },
+  { n: '02', title: 'AI does the heavy lifting', desc: 'Our AI transcribes, summarizes and structures your content into study-ready notes.' },
   { n: '03', title: 'Practice & master', desc: 'Take auto-generated quizzes with instant feedback and AI explanations until it sticks.' },
 ];
 
@@ -165,7 +165,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-[11px] text-muted-foreground">*via Gemini Files API for PDFs</p>
+              <p className="mt-4 text-[11px] text-muted-foreground">*via secure cloud upload for PDFs</p>
             </div>
 
             {/* Floating preview cards */}

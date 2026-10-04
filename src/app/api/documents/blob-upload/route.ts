@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         return {
           allowedContentTypes: ['application/pdf'],
           addRandomSuffix: true,
-          tokenPayload: JSON.stringify({ purpose: 'scholarmate-gemini-pdf' }),
+          tokenPayload: JSON.stringify({ purpose: 'scholarmate-secure-pdf' }),
         };
       },
     });

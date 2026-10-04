@@ -110,11 +110,11 @@ export default function StudentNotesGenerator() {
       return;
     }
     if (pdfIngestionLoading) {
-      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish uploading to Gemini Files API.' });
+      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish its secure upload.' });
       return;
     }
     if (fileName?.toLowerCase().endsWith('.pdf') && !geminiFileUri && !pdfText && !pdfPageImages.length) {
-      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading to Gemini before Notes can be generated.' });
+      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading before notes can be generated.' });
       return;
     }
     setLoading(true);
@@ -185,7 +185,7 @@ export default function StudentNotesGenerator() {
                   <span className="text-center">
                     <span className="block font-semibold">{fileName || 'Click to upload document'}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">PDF, images, DOCX, or PPTX with no application size limit</span>
-                    <span className="mt-1.5 block text-xs font-medium text-primary">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</span>
+                    <span className="mt-1.5 block text-xs font-medium text-primary">{geminiFileUri ? 'PDF uploaded securely; full document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use secure cloud processing when possible, with on-device OCR fallback.'}</span>
                   </span>
                 </button>
               </div>

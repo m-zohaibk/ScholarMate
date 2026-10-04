@@ -127,11 +127,11 @@ export default function StudentQuizCenter() {
       return;
     }
     if (pdfIngestionLoading) {
-      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish uploading to Gemini Files API.' });
+      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish its secure upload.' });
       return;
     }
     if (fileName?.toLowerCase().endsWith('.pdf') && !geminiFileUri && !pdfText && !pdfPageImages.length) {
-      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading to Gemini before a Quiz can be generated.' });
+      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading before a quiz can be generated.' });
       return;
     }
 
@@ -221,7 +221,7 @@ export default function StudentQuizCenter() {
                     <Upload className="mr-2 size-4 shrink-0" />
                     <span className="min-w-0 truncate">{fileName || "Upload PDF, images, DOCX, or PPTX with no application size limit"}</span>
                   </Button>
-                  <p className="text-xs leading-relaxed text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely; full document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use secure cloud processing when possible, with on-device OCR fallback.'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3.5">

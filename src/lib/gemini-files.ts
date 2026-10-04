@@ -66,9 +66,9 @@ async function startGeminiPdfUpload(sizeBytes: number, displayName: string) {
     body: JSON.stringify({ file: { display_name: validatePdfFileName(displayName) } }),
   });
   console.log('[Gemini PDF] Upload session started:', { status: startResponse.status, sizeBytes });
-  if (!startResponse.ok) await readJson(startResponse, 'Gemini rejected the PDF upload session.');
+  if (!startResponse.ok) await readJson(startResponse, 'The document service rejected the PDF upload session.');
   const uploadUrl = startResponse.headers.get('x-goog-upload-url');
-  if (!uploadUrl) throw new GeminiFileUploadError('Gemini did not return a resumable upload URL.');
+  if (!uploadUrl) throw new GeminiFileUploadError('The document service did not return an upload URL.');
   return uploadUrl;
 }
 
@@ -84,25 +84,25 @@ async function uploadBytesToGemini(uploadUrl: string, bytes: ArrayBuffer, sizeBy
     body: bytes,
   });
   console.log('[Gemini PDF] Uploading PDF bytes:', { sizeBytes });
-  if (!response.ok) await readJson(response, 'Gemini rejected the PDF bytes.');
+  if (!response.ok) await readJson(response, 'The document service rejected the PDF bytes.');
   console.log('[Gemini PDF] PDF byte upload response:', { status: response.status });
-  const payload = await readJson(response, 'Gemini returned an invalid PDF upload response.') as GeminiFile & { file?: GeminiFile };
+  const payload = await readJson(response, 'The document service returned an invalid PDF upload response.') as GeminiFile & { file?: GeminiFile };
   const file = payload.file || payload;
-  if (!file.name) throw new GeminiFileUploadError('Gemini did not return a file name after upload.');
+  if (!file.name) throw new GeminiFileUploadError('The document service did not return a file name after upload.');
   console.log('[Gemini PDF] File uploaded:', { fileName: file.name, hasUri: Boolean(file.uri), state: file.state || 'STATE_UNSPECIFIED' });
   return file.name;
 }
 
 async function getGeminiPdfStatusByName(name: string) {
   const apiKey = getApiKey();
-  if (!isGeminiFileName(name)) throw new GeminiFileUploadError('The Gemini file reference is invalid.', 422);
+  if (!isGeminiFileName(name)) throw new GeminiFileUploadError('The document file reference is invalid.', 422);
   const response = await fetch(`${GEMINI_FILES_URL}/${name}`, { headers: { 'x-goog-api-key': apiKey } });
-  if (!response.ok) await readJson(response, 'Gemini could not check the uploaded PDF status.');
-  const file = await readJson(response, 'Gemini returned an invalid PDF status response.') as GeminiFile;
+  if (!response.ok) await readJson(response, 'The document service could not check the uploaded PDF status.');
+  const file = await readJson(response, 'The document service returned an invalid PDF status response.') as GeminiFile;
   console.log('[Gemini PDF] File state:', { fileName: name, state: file.state || 'STATE_UNSPECIFIED', hasUri: Boolean(file.uri), status: response.status });
-  if (file.state === 'FAILED') throw new GeminiFileUploadError(file.error?.message || 'Gemini could not process this PDF.');
-  if (!file.name) throw new GeminiFileUploadError('Gemini did not return a usable PDF file reference.');
-  if (file.state === 'ACTIVE' && !file.uri) throw new GeminiFileUploadError('Gemini marked the PDF active but did not return a usable file URI.');
+  if (file.state === 'FAILED') throw new GeminiFileUploadError(file.error?.message || 'The document service could not process this PDF.');
+  if (!file.name) throw new GeminiFileUploadError('The document service did not return a usable PDF file reference.');
+  if (file.state === 'ACTIVE' && !file.uri) throw new GeminiFileUploadError('The document service did not return a usable file reference.');
   return { fileUri: file.uri || '', fileName: file.name, mimeType: file.mimeType || 'application/pdf', state: file.state || 'STATE_UNSPECIFIED' };
 }
 
@@ -125,7 +125,7 @@ export async function uploadGeminiPdfFromBlob(pathname: string, sizeBytes: numbe
     if (status.state === 'ACTIVE') return status;
     await sleep(2000);
   }
-  throw new GeminiFileUploadError('Gemini is still processing this PDF. Please try again in a moment.', 504);
+  throw new GeminiFileUploadError('The document service is still processing this PDF. Please try again in a moment.', 504);
 }
 
 export function isGeminiFileName(value: string) {

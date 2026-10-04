@@ -108,7 +108,7 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
           <span className="block text-[13px] font-semibold text-white">
             {role === 'teacher' ? 'Teacher' : 'Student'} Workspace
           </span>
-          <span className="block text-[11px] text-white/55">Powered by Gemini AI</span>
+          <span className="block text-[11px] text-white/55">Powered by AI</span>
         </span>
       </div>
       <NavItems role={role} onNavigate={onNavigate} />

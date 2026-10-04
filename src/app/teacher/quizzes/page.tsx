@@ -214,7 +214,7 @@ export default function TeacherQuizGenerator() {
           <Card id="syllabus" className="scroll-mt-24 overflow-hidden border-border/60">
             <CardHeader className="border-b border-border/60 bg-primary/[0.04] pb-4">
               <CardTitle className="text-base">Syllabus / Topics</CardTitle>
-              <CardDescription>Paste your syllabus or import a text, PDF, DOCX, or PPTX file. PDFs are uploaded to Gemini Files API without an application size or page limit.</CardDescription>
+              <CardDescription>Paste your syllabus or import a text, PDF, DOCX, or PPTX file. PDFs are uploaded to our secure cloud without an application size or page limit.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 p-5 sm:p-6">
               <input ref={syllabusFileRef} type="file" accept=".txt,.md,.pdf,.docx,.pptx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handleSyllabusFile} />
