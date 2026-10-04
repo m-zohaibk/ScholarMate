@@ -194,165 +194,142 @@ export default function StudentQuizCenter() {
     }
   };
 
-  return <>
-    <div className="max-w-4xl mx-auto space-y-8">
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-6 sm:space-y-8">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Interactive AI Quiz</h1>
-        <p className="text-muted-foreground">Transcribe handwritten notes and test your knowledge with real-time feedback.</p>
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-accent">
+          <Sparkles className="size-3" /> AI Quiz
+        </p>
+        <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">Interactive AI Quiz</h1>
+        <p className="mt-1.5 text-muted-foreground">Transcribe handwritten notes and test your knowledge with real-time feedback.</p>
       </div>
 
       {!quiz ? (
-        <div className="space-y-6">
-        <Card className="border-none shadow-sm overflow-hidden">
-          <div className="md:flex">
-            <div className="md:w-1/3 bg-primary/5 p-8 flex flex-col items-center justify-center text-center border-r border-dashed">
-              <div className="bg-primary/10 p-4 rounded-3xl mb-4">
-                <BookOpen className="w-10 h-10 text-primary" />
+        <div className="space-y-5">
+          <Card className="overflow-hidden border-border/60">
+            <div className="grid md:grid-cols-3">
+              <div className="flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 p-7 text-center sm:p-8">
+                <span className="grid size-16 place-items-center rounded-3xl bg-white text-primary shadow-lg shadow-primary/15"><BookOpen className="size-8" /></span>
+                <h3 className="mt-4 font-headline text-xl font-bold">Smart Analysis</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Supports PDFs, printed text, handwriting OCR, DOCX, and PPTX files.</p>
               </div>
-              <h3 className="font-headline text-xl font-bold">Smart Analysis</h3>
-              <p className="text-sm text-muted-foreground mt-2">Supports PDFs, printed text, handwriting OCR, DOCX, and PPTX files.</p>
-            </div>
-            <div className="md:w-2/3 p-8 space-y-6 bg-white">
-              <div className="space-y-2">
-                <Label>Source Document (PDF, Image, DOCX, or PPTX)</Label>
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange}
-                  accept="application/pdf,image/*,.docx,.pptx"
-                />
-                <Button 
-                  variant="outline" 
-                  className="w-full h-12 border-dashed border-2 rounded-xl"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {fileName || "Upload PDF, images, DOCX, or PPTX with no application size limit"}
+              <div className="space-y-5 p-5 sm:p-7 md:col-span-2">
+                <div className="space-y-2">
+                  <Label>Source Document (PDF, Image, DOCX, or PPTX)</Label>
+                  <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" />
+                  <Button variant="outline" className="h-auto min-h-12 w-full rounded-2xl border-2 border-dashed py-3.5" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="mr-2 size-4 shrink-0" />
+                    <span className="min-w-0 truncate">{fileName || "Upload PDF, images, DOCX, or PPTX with no application size limit"}</span>
+                  </Button>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="space-y-2">
+                    <Label>Level</Label>
+                    <Select value={difficulty} onValueChange={(v: any) => setDifficulty(v)}>
+                      <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Easy">Easy</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Hard">Hard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Questions</Label>
+                    <Select value={numQuestions.toString()} onValueChange={(v) => setNumQuestions(parseInt(v))}>
+                      <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3 Questions</SelectItem>
+                        <SelectItem value="5">5 Questions</SelectItem>
+                        <SelectItem value="10">10 Questions</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25" disabled={loading || pdfIngestionLoading || !fileData} onClick={() => void handleGenerate()}>
+                  {pdfIngestionLoading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Preparing PDF...</> : loading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Decoding Material...</> : <><Sparkles className="mr-2 size-5" /> Generate Interactive Quiz</>}
                 </Button>
-                <p className="text-xs text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</p>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Level</Label>
-                  <Select value={difficulty} onValueChange={(v: any) => setDifficulty(v)}>
-                    <SelectTrigger className="rounded-xl h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Easy">Easy</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="Hard">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Questions</Label>
-                  <Select value={numQuestions.toString()} onValueChange={(v) => setNumQuestions(parseInt(v))}>
-                    <SelectTrigger className="rounded-xl h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3">3 Questions</SelectItem>
-                      <SelectItem value="5">5 Questions</SelectItem>
-                      <SelectItem value="10">10 Questions</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Button 
-                className="w-full h-12 text-lg font-headline bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20" 
-                disabled={loading || pdfIngestionLoading || !fileData}
-                onClick={() => void handleGenerate()}
-              >
-                {pdfIngestionLoading ? (
-                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Preparing PDF...</>
-                ) : loading ? (
-                  <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Decoding Material...</>
-                ) : (
-                  <><Sparkles className="w-5 h-5 mr-2" /> Generate Interactive Quiz</>
-                )}
-              </Button>
             </div>
-          </div>
-        </Card>
-        {publishedQuizzes.length > 0 && <Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg">Published by your teacher</CardTitle><CardDescription>Start a shared assessment from your course.</CardDescription></CardHeader><CardContent className="space-y-2">{publishedQuizzes.map((item) => <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.questions.length} questions</p></div><Button size="sm" onClick={() => startPublishedQuiz(item)}>Start</Button></div>)}</CardContent></Card>}
+          </Card>
+          {publishedQuizzes.length > 0 && (
+            <Card className="border-border/60">
+              <CardHeader className="pb-3"><CardTitle className="text-lg">Published by your teacher</CardTitle><CardDescription>Start a shared assessment from your course.</CardDescription></CardHeader>
+              <CardContent className="space-y-2">
+                {publishedQuizzes.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 p-3.5">
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold">{item.title}</p><p className="text-xs text-muted-foreground">{item.questions.length} questions</p></div>
+                    <Button size="sm" className="shrink-0 rounded-xl" onClick={() => startPublishedQuiz(item)}>Start</Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
       ) : isSubmitted ? (
-        <Card className="border-none shadow-xl text-center p-12 space-y-8 animate-in zoom-in-95 duration-500">
+        <Card className="animate-in zoom-in-95 border-border/60 p-8 text-center sm:p-12">
           <div className="space-y-2">
-            <h2 className="font-headline text-4xl font-bold">Session Review</h2>
-            <p className="text-muted-foreground text-lg">{quiz.quizTitle}</p>
+            <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">Session Review</h2>
+            <p className="text-muted-foreground">{quiz.quizTitle}</p>
           </div>
-          
-          <div className="flex justify-center">
-            <div className="relative w-48 h-48 flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90">
+          <div className="mt-8 flex justify-center">
+            <div className="relative flex size-44 items-center justify-center sm:size-48">
+              <svg className="size-full -rotate-90" viewBox="0 0 192 192">
                 <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-muted" />
-                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * score / quiz.questions.length)} className="text-primary transition-all duration-1000" />
+                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * score / quiz.questions.length)} strokeLinecap="round" className="text-primary transition-all duration-1000" />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-5xl font-bold">{score}</span>
-                <span className="text-muted-foreground text-sm">out of {quiz.questions.length}</span>
+                <span className="font-headline text-5xl font-bold">{score}</span>
+                <span className="text-sm text-muted-foreground">out of {quiz.questions.length}</span>
               </div>
             </div>
           </div>
-
-          <div className="space-y-4 max-w-sm mx-auto">
-            <Button className="w-full h-12 font-headline" onClick={() => { setQuiz(null); setQuizId(''); setFileData(null); setFileName(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
-            <Button variant="outline" className="w-full h-12 font-headline" asChild><a href="/student">Dashboard</a></Button>
+          <div className="mx-auto mt-8 max-w-sm space-y-3">
+            <Button className="h-12 w-full rounded-2xl font-semibold" onClick={() => { setQuiz(null); setQuizId(''); setFileData(null); setFileName(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
+            <Button variant="outline" className="h-12 w-full rounded-2xl font-semibold" asChild><a href="/student">Dashboard</a></Button>
           </div>
         </Card>
       ) : (
-        <div className="space-y-6">
-          <div className="flex justify-between items-end">
-            <div>
-              <p className="text-primary font-bold text-sm tracking-wider uppercase mb-1">{quiz.quizTitle}</p>
-              <h2 className="text-xl font-headline font-bold">Question {activeQuestion + 1} of {quiz.questions.length}</h2>
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <p className="mb-1 truncate text-xs font-bold uppercase tracking-[0.14em] text-primary">{quiz.quizTitle}</p>
+              <h2 className="font-headline text-xl font-bold">Question {activeQuestion + 1} of {quiz.questions.length}</h2>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground bg-white px-3 py-1 rounded-full border shadow-sm">
-              <span className="text-xs font-medium">Vision AI Powered</span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-white/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">
+              <Sparkles className="size-3.5 text-accent" /> Vision AI Powered
+            </span>
           </div>
 
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="h-2.5 rounded-full" />
 
-          <Card className="border-none shadow-lg overflow-hidden">
-            <CardContent className="p-8 space-y-8">
-              <div className="space-y-6">
-                <p className="text-2xl font-medium leading-tight">{currentQuestion?.questionText}</p>
-                
+          <Card className="overflow-hidden border-border/60 shadow-xl shadow-primary/5">
+            <CardContent className="space-y-7 p-5 sm:p-8">
+              <div className="space-y-5">
+                <p className="text-xl font-medium leading-snug sm:text-2xl">{currentQuestion?.questionText}</p>
+
                 {currentQuestion?.type === 'MCQ' && currentQuestion.options && (
-                  <RadioGroup 
-                    value={userAnswers[activeQuestion]} 
-                    onValueChange={handleAnswerSelect}
-                    className="grid gap-3 pt-4"
-                  >
+                  <RadioGroup value={userAnswers[activeQuestion]} onValueChange={handleAnswerSelect} className="grid gap-2.5 pt-2">
                     {currentQuestion.options.map((opt, i) => {
                       const isSelected = userAnswers[activeQuestion] === opt;
                       const isCorrect = opt === currentQuestion.correctAnswer;
-                      
-                      let variantClasses = "border-muted hover:border-primary/20 hover:bg-muted/30";
+                      let variantClasses = "border-border hover:border-primary/30 hover:bg-muted/40";
                       if (isChecked) {
-                        if (isCorrect) variantClasses = "border-green-500 bg-green-50 text-green-700";
+                        if (isCorrect) variantClasses = "border-emerald-500 bg-emerald-50 text-emerald-700";
                         else if (isSelected) variantClasses = "border-red-500 bg-red-50 text-red-700";
                       } else if (isSelected) {
-                        variantClasses = "border-primary bg-primary/5";
+                        variantClasses = "border-primary bg-primary/5 shadow-sm";
                       }
-
                       return (
-                        <div key={i} className={cn(
-                          "flex items-center space-x-2 border-2 rounded-xl p-4 transition-all",
-                          !isChecked && "cursor-pointer",
-                          variantClasses
-                        )}>
+                        <div key={i} className={cn("flex items-center space-x-2 rounded-2xl border-2 p-3.5 transition-all sm:p-4", !isChecked && "cursor-pointer", variantClasses)}>
                           <RadioGroupItem value={opt} id={`opt-${i}`} className="hidden" disabled={isChecked} />
-                          <Label htmlFor={`opt-${i}`} className="flex-1 cursor-pointer font-medium flex items-center justify-between">
-                            {opt}
-                            {isChecked && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-600" />}
-                            {isChecked && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-600" />}
+                          <Label htmlFor={`opt-${i}`} className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-medium sm:text-[15px]">
+                            <span>{opt}</span>
+                            {isChecked && isCorrect && <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />}
+                            {isChecked && isSelected && !isCorrect && <XCircle className="size-5 shrink-0 text-red-600" />}
                           </Label>
                         </div>
                       );
@@ -361,21 +338,17 @@ export default function StudentQuizCenter() {
                 )}
 
                 {currentQuestion?.type !== 'MCQ' && (
-                  <div className="pt-4 space-y-4">
-                    <textarea 
-                      className={cn(
-                        "w-full min-h-[150px] p-4 rounded-xl border-2 bg-background outline-none transition-all",
-                        isChecked ? "border-muted-foreground/30 bg-muted/10" : "border-muted focus:border-primary"
-                      )}
+                  <div className="space-y-4 pt-2">
+                    <textarea
+                      className={cn("min-h-[140px] w-full rounded-2xl border-2 bg-background p-4 text-[15px] outline-none transition-all sm:min-h-[150px]", isChecked ? "border-border bg-muted/40" : "border-border focus:border-primary")}
                       placeholder="Type your answer based on the document contents..."
                       value={userAnswers[activeQuestion] || ''}
                       onChange={(e) => handleAnswerSelect(e.target.value)}
                       disabled={isChecked}
                     />
-                    
                     {isChecked && (
-                      <div className="p-6 bg-primary/5 border rounded-xl animate-in slide-in-from-top-2">
-                        <p className="text-sm font-bold text-primary uppercase mb-2">Reference Answer</p>
+                      <div className="animate-in slide-in-from-top-2 rounded-2xl border border-primary/15 bg-primary/5 p-5">
+                        <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-primary">Reference Answer</p>
                         <p className="text-foreground">{currentQuestion?.correctAnswer}</p>
                       </div>
                     )}
@@ -384,43 +357,29 @@ export default function StudentQuizCenter() {
               </div>
 
               {isChecked && currentQuestion?.explanation && (
-                <div className="bg-muted/50 p-6 rounded-xl border-l-4 border-accent animate-in fade-in duration-500">
-                  <div className="flex gap-2 items-start">
-                    <AlertCircle className="w-5 h-5 text-accent mt-0.5 shrink-0" />
+                <div className="animate-in fade-in rounded-2xl border-l-4 border-accent bg-muted/50 p-5 duration-500 sm:p-6">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="mt-0.5 size-5 shrink-0 text-accent" />
                     <div>
-                      <p className="text-sm font-bold text-accent uppercase mb-1">AI Explanation</p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{currentQuestion.explanation}</p>
+                      <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent">AI Explanation</p>
+                      <p className="text-sm leading-relaxed text-muted-foreground">{currentQuestion.explanation}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="flex justify-between pt-6 border-t">
-                <Button 
-                  variant="ghost" 
-                  disabled={activeQuestion === 0 || loading}
-                  onClick={() => {
-                    setActiveQuestion(activeQuestion - 1);
-                  }}
-                >
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-5">
+                <Button variant="ghost" className="rounded-2xl" disabled={activeQuestion === 0 || loading} onClick={() => { setActiveQuestion(activeQuestion - 1); }}>
                   Previous
                 </Button>
-                
                 {!isChecked ? (
-                  <Button 
-                    className="px-8 rounded-xl font-headline bg-primary hover:bg-primary/90"
-                    disabled={!userAnswers[activeQuestion]}
-                    onClick={handleCheckAnswer}
-                  >
+                  <Button className="rounded-2xl px-6 font-semibold sm:px-8" disabled={!userAnswers[activeQuestion]} onClick={handleCheckAnswer}>
                     Check Answer
                   </Button>
                 ) : (
-                  <Button 
-                    className="px-8 rounded-xl font-headline bg-accent hover:bg-accent/90"
-                    onClick={nextQuestion}
-                  >
-                    {activeQuestion < quiz.questions.length - 1 ? "Next Question" : "Finish Review"} 
-                    <ChevronRight className="w-4 h-4 ml-1" />
+                  <Button className="rounded-2xl bg-accent px-6 font-semibold hover:bg-accent/90 sm:px-8" onClick={nextQuestion}>
+                    {activeQuestion < quiz.questions.length - 1 ? "Next Question" : "Finish Review"}
+                    <ChevronRight className="ml-1 size-4" />
                   </Button>
                 )}
               </div>
@@ -429,5 +388,5 @@ export default function StudentQuizCenter() {
         </div>
       )}
     </div>
-  </>;
+  );
 }

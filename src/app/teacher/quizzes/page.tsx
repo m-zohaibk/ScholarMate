@@ -150,15 +150,130 @@ export default function TeacherQuizGenerator() {
     window.print();
   };
 
-  return <>
-    <div className="max-w-5xl mx-auto space-y-8">
-    <div><h1 className="font-headline text-3xl font-bold">AI Quiz Generator</h1><p className="text-muted-foreground">Create, review, save, and publish assessments aligned with your curriculum.</p></div>
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-1 space-y-6"><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg">Configuration</CardTitle></CardHeader><CardContent className="space-y-4"><div className="space-y-2"><Label>Difficulty</Label><Select value={difficulty} onValueChange={(value) => setDifficulty(value as typeof difficulty)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label htmlFor="question-count">Questions Count</Label><Input id="question-count" type="number" min={1} max={20} value={Number.isFinite(numQuestions) ? numQuestions : ''} onChange={(event) => setNumQuestions(Number(event.target.value))} /></div><div className="space-y-2"><Label>Focus Keywords</Label><div className="flex gap-2"><Input placeholder="e.g. DNA" value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleAddTag(); } }} /><Button type="button" variant="secondary" size="icon" onClick={handleAddTag} aria-label="Add keyword"><Plus className="w-4 h-4" /></Button></div><div className="flex flex-wrap gap-2 mt-2">{includeTags.map((tag) => <Badge key={tag} variant="secondary" className="pl-2 pr-1 gap-1">{tag}<button type="button" aria-label={`Remove ${tag}`} onClick={() => setIncludeTags(includeTags.filter((item) => item !== tag))}><X className="w-3 h-3" /></button></Badge>)}</div></div></CardContent></Card><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg">Saved Drafts</CardTitle></CardHeader><CardContent className="space-y-2">{savedQuizzes.length ? savedQuizzes.map((quiz) => <button type="button" key={quiz.id} onClick={() => loadQuiz(quiz)} className="w-full text-left rounded-lg border p-3 hover:border-primary/40 hover:bg-primary/5"><p className="font-medium truncate">{quiz.title}</p><p className="text-xs text-muted-foreground">{quiz.published ? 'Published' : 'Draft'} · {quiz.questions.length} questions</p></button>) : <p className="text-sm text-muted-foreground">Generated quizzes will appear here.</p>}</CardContent></Card></div>
-      <div className="lg:col-span-2 space-y-6"><Card id="syllabus" className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg">Syllabus / Topics</CardTitle><CardDescription>Paste your syllabus or import a text, PDF, DOCX, or PPTX file. PDFs are uploaded to Gemini Files API without an application size or page limit.</CardDescription></CardHeader><CardContent className="space-y-4"><input ref={syllabusFileRef} type="file" accept=".txt,.md,.pdf,.docx,.pptx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handleSyllabusFile} /><Button type="button" variant="outline" className="w-full border-dashed" onClick={() => syllabusFileRef.current?.click()}><FileUp className="w-4 h-4 mr-2" />Import syllabus document</Button><Textarea placeholder="Enter syllabus details here..." className="min-h-[200px] bg-background/50 border-dashed border-2" value={syllabus} onChange={(event) => setSyllabus(event.target.value)} /><Button className="w-full h-12 text-lg font-headline" disabled={loading || !syllabus.trim()} onClick={() => void handleGenerate()}>{loading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Generating...</> : <><Sparkles className="w-5 h-5 mr-2" />Generate Quiz</>}</Button></CardContent></Card>
-      {generatedQuiz && <Card className="border-none shadow-md print:shadow-none"><CardHeader className="bg-primary/5 rounded-t-xl"><div className="flex flex-col sm:flex-row justify-between items-start gap-3"><div><CardTitle className="font-headline text-2xl">{generatedQuiz.title}</CardTitle>{generatedQuiz.description && <CardDescription>{generatedQuiz.description}</CardDescription>}</div><div className="flex gap-2 print:hidden"><Button size="sm" variant="outline" onClick={exportPdf}><Download className="w-4 h-4 mr-1" />Export PDF</Button><Button size="sm" variant={published ? 'secondary' : 'default'} onClick={updatePublication}>{published ? <><Globe2 className="w-4 h-4 mr-1" />Unpublish</> : <><Save className="w-4 h-4 mr-1" />Publish</>}</Button></div></div></CardHeader><CardContent className="space-y-8 pt-6">{generatedQuiz.questions.map((question, index) => <div key={`${question.questionText}-${index}`} className="space-y-3 pb-6 border-b last:border-0"><div className="flex items-start gap-3"><span className="font-bold text-primary bg-primary/10 w-8 h-8 rounded-full flex items-center justify-center shrink-0">{index + 1}</span><p className="font-medium text-lg leading-snug">{question.questionText}</p></div>{question.options ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-11">{question.options.map((option) => <div key={option} className={cn('p-3 rounded-lg border text-sm', option === question.correctAnswer ? 'bg-green-50 border-green-200 text-green-700 font-medium' : 'bg-background')}>{option}</div>)}</div> : <div className="pl-11 p-4 bg-muted/30 rounded-lg text-sm italic"><span className="font-bold text-xs uppercase block mb-1">Answer Key</span>{question.correctAnswer}</div>}{question.explanation && <div className="pl-11 mt-2 flex items-start gap-2 text-xs text-muted-foreground"><CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-primary" /><span>{question.explanation}</span></div>}</div>)}</CardContent></Card>}
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
+      <div>
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-accent">
+          <Sparkles className="size-3" /> Assessment builder
+        </p>
+        <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">AI Quiz Generator</h1>
+        <p className="mt-1.5 text-muted-foreground">Create, review, save, and publish assessments aligned with your curriculum.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
+        <div className="space-y-5 lg:col-span-1">
+          <Card className="overflow-hidden border-border/60">
+            <CardHeader className="border-b border-border/60 bg-accent/[0.05] pb-4">
+              <CardTitle className="text-base">Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5">
+              <div className="space-y-2">
+                <Label>Difficulty</Label>
+                <Select value={difficulty} onValueChange={(value) => setDifficulty(value as typeof difficulty)}>
+                  <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="question-count">Questions Count</Label>
+                <Input id="question-count" type="number" min={1} max={20} className="h-11 rounded-2xl" value={Number.isFinite(numQuestions) ? numQuestions : ''} onChange={(event) => setNumQuestions(Number(event.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Focus Keywords</Label>
+                <div className="flex gap-2">
+                  <Input placeholder="e.g. DNA" className="h-11 rounded-2xl" value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleAddTag(); } }} />
+                  <Button type="button" variant="secondary" size="icon" className="h-11 w-11 shrink-0 rounded-2xl" onClick={handleAddTag} aria-label="Add keyword"><Plus className="size-4" /></Button>
+                </div>
+                {includeTags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {includeTags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="gap-1 rounded-full py-1 pl-3 pr-1.5">{tag}
+                        <button type="button" aria-label={`Remove ${tag}`} onClick={() => setIncludeTags(includeTags.filter((item) => item !== tag))} className="grid size-5 place-items-center rounded-full hover:bg-black/10"><X className="size-3" /></button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card id="published" className="scroll-mt-24 border-border/60">
+            <CardHeader className="pb-3"><CardTitle className="text-base">Saved Drafts</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {savedQuizzes.length ? savedQuizzes.map((quiz) => (
+                <button type="button" key={quiz.id} onClick={() => loadQuiz(quiz)} className="w-full rounded-2xl border border-border/60 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                  <p className="truncate text-sm font-semibold">{quiz.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{quiz.published ? 'Published' : 'Draft'} · {quiz.questions.length} questions</p>
+                </button>
+              )) : <p className="rounded-2xl bg-muted/50 p-4 text-center text-sm text-muted-foreground">Generated quizzes will appear here.</p>}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-5 lg:col-span-2">
+          <Card id="syllabus" className="scroll-mt-24 overflow-hidden border-border/60">
+            <CardHeader className="border-b border-border/60 bg-primary/[0.04] pb-4">
+              <CardTitle className="text-base">Syllabus / Topics</CardTitle>
+              <CardDescription>Paste your syllabus or import a text, PDF, DOCX, or PPTX file. PDFs are uploaded to Gemini Files API without an application size or page limit.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 p-5 sm:p-6">
+              <input ref={syllabusFileRef} type="file" accept=".txt,.md,.pdf,.docx,.pptx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" className="hidden" onChange={handleSyllabusFile} />
+              <Button type="button" variant="outline" className="h-auto min-h-12 w-full rounded-2xl border-2 border-dashed py-3.5" onClick={() => syllabusFileRef.current?.click()}>
+                <FileUp className="mr-2 size-4 shrink-0" /> Import syllabus document
+              </Button>
+              <Textarea placeholder="Enter syllabus details here..." className="min-h-[180px] rounded-2xl border-2 border-dashed bg-muted/30 sm:min-h-[200px]" value={syllabus} onChange={(event) => setSyllabus(event.target.value)} />
+              <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25" disabled={loading || !syllabus.trim()} onClick={() => void handleGenerate()}>
+                {loading ? <><Loader2 className="mr-2 size-5 animate-spin" />Generating...</> : <><Sparkles className="mr-2 size-5" />Generate Quiz</>}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {generatedQuiz && (
+            <Card className="overflow-hidden border-border/60 shadow-xl shadow-primary/5 print:shadow-none">
+              <CardHeader className="border-b border-border/60 bg-gradient-to-r from-primary/10 to-accent/10">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <CardTitle className="font-headline text-xl sm:text-2xl">{generatedQuiz.title}</CardTitle>
+                    {generatedQuiz.description && <CardDescription className="mt-1">{generatedQuiz.description}</CardDescription>}
+                  </div>
+                  <div className="flex shrink-0 gap-2 print:hidden">
+                    <Button size="sm" variant="outline" className="rounded-xl" onClick={exportPdf}><Download className="mr-1.5 size-4" />Export PDF</Button>
+                    <Button size="sm" variant={published ? 'secondary' : 'default'} className="rounded-xl" onClick={updatePublication}>
+                      {published ? <><Globe2 className="mr-1.5 size-4" />Unpublish</> : <><Save className="mr-1.5 size-4" />Publish</>}
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-7 p-5 pt-6 sm:p-7">
+                {generatedQuiz.questions.map((question, index) => (
+                  <div key={`${question.questionText}-${index}`} className="space-y-3 border-b border-border/60 pb-6 last:border-0 last:pb-0">
+                    <div className="flex items-start gap-3">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{index + 1}</span>
+                      <p className="pt-0.5 text-[15px] font-medium leading-snug sm:text-base">{question.questionText}</p>
+                    </div>
+                    {question.options ? (
+                      <div className="grid grid-cols-1 gap-2.5 pl-11 sm:grid-cols-2">
+                        {question.options.map((option) => (
+                          <div key={option} className={cn('rounded-2xl border p-3 text-sm', option === question.correctAnswer ? 'border-emerald-300 bg-emerald-50 font-medium text-emerald-700' : 'bg-muted/40')}>{option}</div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ml-11 rounded-2xl bg-muted/40 p-4 text-sm italic">
+                        <span className="mb-1 block text-[11px] font-bold not-italic uppercase tracking-wider text-muted-foreground">Answer Key</span>{question.correctAnswer}
+                      </div>
+                    )}
+                    {question.explanation && (
+                      <div className="ml-11 mt-1 flex items-start gap-2 text-xs text-muted-foreground">
+                        <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-primary" /><span>{question.explanation}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
-    </div>
-  </>;
+  );
 }

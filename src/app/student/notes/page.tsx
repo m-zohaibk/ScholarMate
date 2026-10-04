@@ -157,13 +157,120 @@ export default function StudentNotesGenerator() {
     URL.revokeObjectURL(url);
   };
 
-  return <>
-    <div className="max-w-5xl mx-auto space-y-8">
-    <div><h1 className="font-headline text-3xl font-bold">AI Structured Notes</h1><p className="text-muted-foreground">Transform complex materials into clear, organized study notes.</p></div>
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div className="lg:col-span-5 space-y-6"><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><FileText className="w-5 h-5 text-primary" />Input Material</CardTitle></CardHeader><CardContent className="space-y-6"><div className="space-y-2"><Label htmlFor="notes-upload">Study Document (PDF, Image, DOCX, or PPTX)</Label><input id="notes-upload" type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" /><button type="button" onClick={() => fileInputRef.current?.click()} className="w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-muted/50 transition-colors"><Upload className="w-8 h-8 text-muted-foreground" /><span className="text-center"><span className="font-medium block">{fileName || 'Click to upload document'}</span><span className="text-xs text-muted-foreground mt-1 block">PDF, images, DOCX, or PPTX with no application size limit</span><span className="text-xs text-muted-foreground mt-1 block">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</span></span></button></div><div className="space-y-3"><Label>Detail Level</Label><Tabs value={detailLevel} onValueChange={(value) => setDetailLevel(value as 'summary' | 'detailed')} className="w-full"><TabsList className="grid w-full grid-cols-2 bg-muted/50"><TabsTrigger value="summary">Summary</TabsTrigger><TabsTrigger value="detailed">Detailed</TabsTrigger></TabsList></Tabs></div><Button className="w-full h-12 text-lg font-headline bg-accent hover:bg-accent/90" disabled={loading || pdfIngestionLoading || !fileData} onClick={() => void handleGenerate()}>{pdfIngestionLoading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Preparing PDF...</> : loading ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Analyzing Document...</> : <><Sparkles className="w-5 h-5 mr-2" />Generate Notes</>}</Button></CardContent></Card><Card className="border-none shadow-sm"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5 text-primary" />Saved Notes</CardTitle></CardHeader><CardContent className="space-y-2">{savedNotes.length ? savedNotes.slice(0, 5).map((item) => <button key={item.id} type="button" onClick={() => setNotes(item)} className="w-full text-left rounded-lg border p-3 hover:border-primary/40 hover:bg-primary/5"><p className="font-medium truncate">{item.title}</p><p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()} · {item.sourceName}</p></button>) : <p className="text-sm text-muted-foreground">Generated notes will appear here.</p>}</CardContent></Card></div>
-      <div className="lg:col-span-7">{!notes ? <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-8 bg-white/40 rounded-3xl border border-dashed"><div className="bg-muted p-6 rounded-full mb-4"><ListTree className="w-12 h-12 text-muted-foreground" /></div><h3 className="font-headline text-xl font-bold text-muted-foreground">No Notes Yet</h3><p className="text-muted-foreground max-w-xs mx-auto mt-2">Upload your document on the left to generate structured notes using Vision AI.</p></div> : <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500"><div className="flex justify-between items-center mb-4 gap-4"><div><h2 className="font-headline text-2xl font-bold text-primary">{notes.title}</h2><p className="text-xs text-muted-foreground">From {notes.sourceName}</p></div><div className="flex gap-2"><Button variant="outline" size="icon" className="rounded-full" onClick={copyNotes} aria-label="Copy notes"><Copy className="w-4 h-4" /></Button><Button variant="outline" size="icon" className="rounded-full" onClick={downloadNotes} aria-label="Download notes"><Download className="w-4 h-4" /></Button></div></div><Card className="border-none shadow-sm overflow-hidden"><CardHeader className="bg-primary/5 py-4"><div className="flex items-center gap-2 text-primary"><Highlighter className="w-4 h-4" /><span className="font-bold text-xs uppercase tracking-wider">Executive Summary</span></div></CardHeader><CardContent className="pt-4 text-muted-foreground leading-relaxed text-sm">{notes.summary}</CardContent></Card>{notes.sections.map((section) => <div key={section.heading} className="space-y-4"><h3 className="font-headline text-xl font-bold border-b pb-2 text-foreground">{section.heading}</h3><div className="grid gap-4">{section.subsections.map((subsection) => <Card key={subsection.subheading} className="border-none shadow-sm bg-white"><CardHeader className="py-4"><CardTitle className="text-base font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader><CardContent className="pt-0"><ul className="space-y-3">{subsection.points.map((point) => <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" /><span>{point}</span></li>)}</ul></CardContent></Card>)}</div></div>)}</div>}</div>
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
+      <div>
+        <p className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
+          <Sparkles className="size-3" /> AI Notes
+        </p>
+        <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">AI Structured Notes</h1>
+        <p className="mt-1.5 text-muted-foreground">Transform complex materials into clear, organized study notes.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+        <div className="space-y-5 lg:col-span-5">
+          <Card className="overflow-hidden border-border/60">
+            <CardHeader className="border-b border-border/60 bg-primary/[0.04] pb-4">
+              <CardTitle className="flex items-center gap-2.5 text-base">
+                <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary"><FileText className="size-4" /></span>
+                Input Material
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5 p-5 sm:p-6">
+              <div className="space-y-2">
+                <Label htmlFor="notes-upload">Study Document (PDF, Image, DOCX, or PPTX)</Label>
+                <input id="notes-upload" type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="group flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/30 p-7 transition-all hover:border-primary/40 hover:bg-primary/[0.04] sm:p-8">
+                  <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-110"><Upload className="size-6" /></span>
+                  <span className="text-center">
+                    <span className="block font-semibold">{fileName || 'Click to upload document'}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">PDF, images, DOCX, or PPTX with no application size limit</span>
+                    <span className="mt-1.5 block text-xs font-medium text-primary">{geminiFileUri ? 'PDF uploaded securely to Gemini Files API; native document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use Gemini Files API when possible, with browser OCR fallback.'}</span>
+                  </span>
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                <Label>Detail Level</Label>
+                <Tabs value={detailLevel} onValueChange={(value) => setDetailLevel(value as 'summary' | 'detailed')} className="w-full">
+                  <TabsList className="grid h-11 w-full grid-cols-2 rounded-2xl bg-muted/60 p-1"><TabsTrigger value="summary" className="rounded-xl">Summary</TabsTrigger><TabsTrigger value="detailed" className="rounded-xl">Detailed</TabsTrigger></TabsList>
+                </Tabs>
+              </div>
+              <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || pdfIngestionLoading || !fileData} onClick={() => void handleGenerate()}>
+                {pdfIngestionLoading ? <><Loader2 className="mr-2 size-5 animate-spin" />Preparing PDF...</> : loading ? <><Loader2 className="mr-2 size-5 animate-spin" />Analyzing Document...</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2.5 text-base">
+                <span className="grid size-9 place-items-center rounded-xl bg-accent/10 text-accent"><History className="size-4" /></span>
+                Saved Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {savedNotes.length ? savedNotes.slice(0, 5).map((item) => (
+                <button key={item.id} type="button" onClick={() => setNotes(item)} className="w-full rounded-2xl border border-border/60 p-3.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                  <p className="truncate text-sm font-semibold">{item.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()} · {item.sourceName}</p>
+                </button>
+              )) : <p className="rounded-2xl bg-muted/50 p-4 text-center text-sm text-muted-foreground">Generated notes will appear here.</p>}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-7">
+          {!notes ? (
+            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-white/40 p-8 text-center sm:min-h-[500px]">
+              <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-primary/10 to-accent/10"><ListTree className="size-9 text-primary" /></span>
+              <h3 className="mt-5 font-headline text-xl font-bold">No Notes Yet</h3>
+              <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">Upload your document to generate structured notes using Vision AI.</p>
+            </div>
+          ) : (
+            <div className="animate-in fade-in slide-in-from-bottom-4 space-y-5 duration-500">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="truncate font-headline text-2xl font-bold tracking-tight text-primary">{notes.title}</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">From {notes.sourceName}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="icon" className="rounded-2xl" onClick={copyNotes} aria-label="Copy notes"><Copy className="size-4" /></Button>
+                  <Button variant="outline" size="icon" className="rounded-2xl" onClick={downloadNotes} aria-label="Download notes"><Download className="size-4" /></Button>
+                </div>
+              </div>
+              <Card className="overflow-hidden border-primary/15">
+                <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 py-3.5">
+                  <div className="flex items-center gap-2 text-primary"><Highlighter className="size-4" /><span className="text-xs font-bold uppercase tracking-wider">Executive Summary</span></div>
+                </CardHeader>
+                <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{notes.summary}</CardContent>
+              </Card>
+              {notes.sections.map((section) => (
+                <div key={section.heading} className="space-y-3.5">
+                  <h3 className="flex items-center gap-2.5 font-headline text-xl font-bold tracking-tight">
+                    <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-accent" />{section.heading}
+                  </h3>
+                  <div className="grid gap-3.5">
+                    {section.subsections.map((subsection) => (
+                      <Card key={subsection.subheading} className="border-border/60 bg-white/70">
+                        <CardHeader className="pb-2.5 pt-4"><CardTitle className="text-[15px] font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader>
+                        <CardContent className="pt-0">
+                          <ul className="space-y-2.5">
+                            {subsection.points.map((point) => (
+                              <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
+                                <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" /><span>{point}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
-    </div>
-  </>;
+  );
 }

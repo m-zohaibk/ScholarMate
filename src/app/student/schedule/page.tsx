@@ -77,10 +77,118 @@ export default function StudySchedulePlanner() {
     toast({ title: 'Schedule optimized', description: 'Tasks are now ordered by date and start time.' });
   };
 
-  return <div className="max-w-6xl mx-auto space-y-8">
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4"><div><h1 className="font-headline text-3xl font-bold">Study Planner</h1><p className="text-muted-foreground">Plan, track, and improve your learning sessions.</p></div><Button className="bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20" onClick={optimize}><Sparkles className="w-4 h-4 mr-2" />AI Optimize Schedule</Button></div>
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8"><div className="lg:col-span-4"><Card className="border-none shadow-sm"><CardContent className="p-4"><Calendar mode="single" selected={date} onSelect={(next) => next && setDate(next)} className="rounded-md" /></CardContent></Card><Card className="border-none shadow-sm mt-6"><CardHeader><CardTitle className="text-lg">Daily Goals</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Focus Time</span><span className="font-bold">{Math.floor(focusMinutes / 60)}h {focusMinutes % 60}m / {Math.floor(goalMinutes / 60)}h</span></div><div className="w-full bg-muted rounded-full h-2 overflow-hidden"><div className="bg-primary h-full transition-all" style={{ width: `${Math.min(100, Math.round((focusMinutes / goalMinutes) * 100))}%` }} /></div><div className="grid grid-cols-2 gap-2 mt-4"><div className="p-3 bg-primary/5 rounded-xl text-center"><p className="text-xl font-bold text-primary">{completed.length}</p><p className="text-[10px] uppercase font-bold text-muted-foreground">Completed</p></div><div className="p-3 bg-accent/5 rounded-xl text-center"><p className="text-xl font-bold text-accent">{dayTasks.length - completed.length}</p><p className="text-[10px] uppercase font-bold text-muted-foreground">Remaining</p></div></div></CardContent></Card></div>
-    <div className="lg:col-span-8 space-y-6"><Card className="border-none shadow-sm"><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle className="font-headline">Schedule for {formatDateLabel(date)}</CardTitle><CardDescription>Keep each session short, focused, and actionable.</CardDescription></div><Badge variant="outline" className="flex gap-1 text-primary border-primary/20"><Bell className="w-3 h-3" /> Reminders Active</Badge></CardHeader><CardContent className="space-y-0 p-0">{dayTasks.length ? dayTasks.map((task) => <div key={task.id} className="group flex items-start gap-4 p-6 border-b last:border-0 hover:bg-primary/5 transition-colors"><div className="text-sm font-bold text-muted-foreground w-16 pt-1">{task.time}</div><div className="flex-1 space-y-1"><div className="flex items-center justify-between gap-3"><h4 className={cn('font-bold text-lg', task.completed && 'text-muted-foreground line-through')}>{task.title}</h4><Badge variant="secondary" className="font-medium">{task.category}</Badge></div><div className="flex items-center gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-1"><Clock className="w-3 h-3" />{task.duration}</span></div></div><button type="button" aria-label={task.completed ? `Mark ${task.title} incomplete` : `Complete ${task.title}`} onClick={() => toggleTask(task.id)} className={cn('p-2 rounded-xl transition-all', task.completed ? 'bg-green-100 text-green-600' : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary')}>{task.completed ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}</button></div>) : <div className="p-12 text-center text-muted-foreground"><Calendar className="mx-auto mb-3 h-8 w-8" /><p>No tasks planned for this day.</p></div>}
-      {showForm ? <form onSubmit={addTask} className="m-6 rounded-xl border bg-background p-4 space-y-4"><div className="flex justify-between items-center"><h3 className="font-semibold">Add study task</h3><Button type="button" variant="ghost" size="icon" onClick={() => setShowForm(false)} aria-label="Close"><X className="w-4 h-4" /></Button></div><div className="grid sm:grid-cols-2 gap-3"><div className="space-y-1 sm:col-span-2"><Label htmlFor="task-title">Task title</Label><Input id="task-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Review biology chapter" autoFocus /></div><div className="space-y-1"><Label htmlFor="task-time">Start time</Label><Input id="task-time" type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div><div className="space-y-1"><Label htmlFor="task-duration">Duration</Label><Input id="task-duration" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="e.g. 45m" /></div><div className="space-y-1 sm:col-span-2"><Label htmlFor="task-category">Category</Label><Input id="task-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div></div><Button type="submit" className="w-full" disabled={!form.title.trim()}>Save Task</Button></form> : <div className="p-8 flex flex-col items-center justify-center text-center"><Button type="button" variant="outline" className="rounded-full h-12 w-12 p-0 border border-dashed mb-2" onClick={() => setShowForm(true)} aria-label="Add task"><Plus className="h-5 w-5" /></Button><p className="text-sm font-medium">Add task for {formatDateLabel(date)}</p></div>}</CardContent></Card></div></div>
-  </div>;
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
+            <Clock className="size-3" /> Planner
+          </p>
+          <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">Study Planner</h1>
+          <p className="mt-1.5 text-muted-foreground">Plan, track, and improve your learning sessions.</p>
+        </div>
+        <Button className="w-full rounded-2xl shadow-lg shadow-accent/25 sm:w-auto" onClick={optimize}>
+          <Sparkles className="mr-2 size-4" /> AI Optimize Schedule
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+        <div className="space-y-5 lg:col-span-4">
+          <Card className="overflow-hidden border-border/60">
+            <CardContent className="p-3 sm:p-4">
+              <Calendar mode="single" selected={date} onSelect={(next) => next && setDate(next)} className="mx-auto rounded-2xl" />
+            </CardContent>
+          </Card>
+          <Card className="border-border/60">
+            <CardHeader className="pb-3"><CardTitle className="text-base">Daily Goals</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Focus Time</span>
+                <span className="font-bold">{Math.floor(focusMinutes / 60)}h {focusMinutes % 60}m / {Math.floor(goalMinutes / 60)}h</span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500" style={{ width: `${Math.min(100, Math.round((focusMinutes / goalMinutes) * 100))}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="rounded-2xl bg-primary/5 p-3.5 text-center">
+                  <p className="font-headline text-2xl font-bold text-primary">{completed.length}</p>
+                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Completed</p>
+                </div>
+                <div className="rounded-2xl bg-accent/5 p-3.5 text-center">
+                  <p className="font-headline text-2xl font-bold text-accent">{dayTasks.length - completed.length}</p>
+                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Remaining</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="lg:col-span-8">
+          <Card className="overflow-hidden border-border/60">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-white/50 pb-4">
+              <div className="min-w-0">
+                <CardTitle className="truncate font-headline text-lg">Schedule for {formatDateLabel(date)}</CardTitle>
+                <CardDescription>Keep each session short, focused, and actionable.</CardDescription>
+              </div>
+              <Badge variant="outline" className="flex shrink-0 items-center gap-1.5 rounded-full border-primary/25 bg-primary/5 px-3 py-1.5 text-primary">
+                <Bell className="size-3" /> Reminders Active
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              {dayTasks.length ? dayTasks.map((task) => (
+                <div key={task.id} className="group flex items-center gap-3.5 border-b border-border/60 p-4 transition-colors last:border-0 hover:bg-primary/[0.03] sm:gap-4 sm:p-5">
+                  <div className="w-14 shrink-0 pt-0.5 text-sm font-bold text-muted-foreground">{task.time}</div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-2.5">
+                      <h4 className={cn('truncate text-[15px] font-bold sm:text-base', task.completed && 'text-muted-foreground line-through')}>{task.title}</h4>
+                      <Badge variant="secondary" className="shrink-0 rounded-full font-medium">{task.category}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Clock className="size-3" />{task.duration}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={task.completed ? `Mark ${task.title} incomplete` : `Complete ${task.title}`}
+                    onClick={() => toggleTask(task.id)}
+                    className={cn('grid size-11 shrink-0 place-items-center rounded-2xl transition-all', task.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary')}
+                  >
+                    {task.completed ? <CheckCircle2 className="size-6" /> : <Circle className="size-6" />}
+                  </button>
+                </div>
+              )) : (
+                <div className="p-10 text-center text-muted-foreground sm:p-12">
+                  <span className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-muted"><Calendar className="size-7" /></span>
+                  <p className="font-medium text-foreground">No tasks planned for this day.</p>
+                  <p className="mt-1 text-sm">Tap the + button below to add your first session.</p>
+                </div>
+              )}
+              {showForm ? (
+                <form onSubmit={addTask} className="m-4 space-y-4 rounded-3xl border border-border/60 bg-muted/30 p-4 sm:m-6 sm:p-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-headline font-bold">Add study task</h3>
+                    <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => setShowForm(false)} aria-label="Close"><X className="size-4" /></Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="task-title">Task title</Label><Input id="task-title" className="h-11 rounded-2xl" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Review biology chapter" autoFocus /></div>
+                    <div className="space-y-1.5"><Label htmlFor="task-time">Start time</Label><Input id="task-time" type="time" className="h-11 rounded-2xl" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div>
+                    <div className="space-y-1.5"><Label htmlFor="task-duration">Duration</Label><Input id="task-duration" className="h-11 rounded-2xl" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="e.g. 45m" /></div>
+                    <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="task-category">Category</Label><Input id="task-category" className="h-11 rounded-2xl" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+                  </div>
+                  <Button type="submit" className="h-11 w-full rounded-2xl font-semibold" disabled={!form.title.trim()}>Save Task</Button>
+                </form>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                  <Button type="button" variant="outline" className="mb-2.5 h-[52px] w-[52px] rounded-full border-2 border-dashed p-0" onClick={() => setShowForm(true)} aria-label="Add task">
+                    <Plus className="size-5" />
+                  </Button>
+                  <p className="text-sm font-medium">Add task for {formatDateLabel(date)}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
