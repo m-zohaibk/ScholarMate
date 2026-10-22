@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { getAttempts, getNotes, getTasks, type QuizAttempt, type StoredNote, type StudyTask } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadAttempts, loadNotes, loadTasks } from '@/lib/firestore-store';
+import { getTopicStats } from '@/lib/analytics';
 
 function minutesFromDuration(duration: string) {
   const hours = duration.match(/(\d+(?:\.\d+)?)h/)?.[1];
@@ -189,6 +190,32 @@ export default function StudentDashboard() {
               <Button size="sm" variant="outline" className="w-full rounded-xl bg-white/70" asChild>
                 <Link href="/student/schedule">View Schedule</Link>
               </Button>
+            </div>
+            <div className="space-y-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] p-4">
+              <div className="flex items-center gap-2 text-red-500">
+                <Target className="size-4" />
+                <span className="text-[13px] font-bold">Knowledge Gaps</span>
+              </div>
+              {(() => {
+                const weakTopics = getTopicStats(attempts).filter((stat) => stat.status === 'Weak');
+                return weakTopics.length ? (
+                  <>
+                    <p className="text-sm font-medium leading-relaxed">
+                      {weakTopics.length} weak topic{weakTopics.length === 1 ? '' : 's'} detected — weakest: {weakTopics[0].topic} ({weakTopics[0].avgPct}%).
+                    </p>
+                    <Button size="sm" className="w-full rounded-xl" asChild>
+                      <Link href="/student/weak-areas">Fix My Weak Areas</Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium leading-relaxed">No weak areas detected yet. Finish a quiz and your gaps will be mapped automatically.</p>
+                    <Button size="sm" variant="outline" className="w-full rounded-xl bg-white/70" asChild>
+                      <Link href="/student/weak-areas">View Weak Areas</Link>
+                    </Button>
+                  </>
+                );
+              })()}
             </div>
           </CardContent>
         </Card>

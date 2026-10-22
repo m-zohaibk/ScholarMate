@@ -1,36 +1,86 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StudentQuizGenerationOutput } from '@/ai/flows/student-quiz-generation-flow';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sparkles, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, XCircle, ChevronRight, Upload } from 'lucide-react';
+import { Sparkles, Loader2, BookOpen, Clock, AlertCircle, CheckCircle2, XCircle, ChevronRight, Lightbulb, Target, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { getQuizzes, makeId, saveAttempt, saveQuiz, type StoredQuiz } from '@/lib/study-store';
+import { getAttempts, getQuizzes, makeId, saveAttempt, saveQuiz, takeStudySeed, type QuizAttempt, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
-import { loadPublishedQuizzes, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
-import { preparePdfForUpload } from '@/lib/browser-pdf';
+import { loadAttempts, loadPublishedQuizzes, saveAttemptStatToFirestore, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
 import { parseApiResponse } from '@/lib/api-response';
-import { uploadPdfForGemini } from '@/lib/gemini-file-client';
+import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
+import { buildFeedbackSummary, resolveAdaptiveDifficulty, type DifficultyLevel, type FeedbackSummary } from '@/lib/analytics';
+
+const TEXT_PLACEHOLDER_URI = 'data:application/pdf;base64,AA==';
+
+function ExplainSimplyButton({ question, correctAnswer, explanation }: { question: string; correctAnswer: string; explanation: string }) {
+  const [simple, setSimple] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const response = await fetch('/api/student/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, correctAnswer, explanation }),
+      });
+      const payload = await parseApiResponse<{ simple: string }>(response);
+      setSimple(payload.simple);
+    } catch {
+      setSimple('Could not simplify this right now — please try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (simple) {
+    return (
+      <div className="mt-3 rounded-xl bg-white/70 p-3.5 text-sm leading-relaxed text-foreground">
+        <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Lightbulb className="size-3.5" /> In simple words</p>
+        {simple}
+      </div>
+    );
+  }
+  return (
+    <Button variant="outline" size="sm" className="mt-3 rounded-xl bg-white/60" disabled={busy} onClick={() => void run()}>
+      {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Lightbulb className="mr-1.5 size-3.5" />}
+      Explain simply
+    </Button>
+  );
+}
 
 export default function StudentQuizCenter() {
   const { toast } = useToast();
   const { firestore, user, isUserLoading } = useFirebase();
   const [loading, setLoading] = useState(false);
-  const [pdfIngestionLoading, setPdfIngestionLoading] = useState(false);
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
+  const [difficultyChoice, setDifficultyChoice] = useState<'Adaptive' | DifficultyLevel>('Adaptive');
   const [numQuestions, setNumQuestions] = useState(5);
   const [quiz, setQuiz] = useState<StudentQuizGenerationOutput | null>(null);
   const [quizId, setQuizId] = useState('');
   const [publishedQuizzes, setPublishedQuizzes] = useState<StoredQuiz[]>([]);
+  const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
+
+  const [selection, setSelection] = useState<SourceSelection | null>(null);
+  const [seedMaterial, setSeedMaterial] = useState<{ label: string; text: string; topic?: string } | null>(null);
+  const [pickerSeed, setPickerSeed] = useState<{ sourceId: string; topicTitle?: string } | null>(null);
+  const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [activePublished, setActivePublished] = useState<StoredQuiz | null>(null);
+  const [lastSummary, setLastSummary] = useState<FeedbackSummary | null>(null);
+  const seedConsumed = useRef(false);
 
   useEffect(() => {
-    const refresh = () => setPublishedQuizzes(getQuizzes().filter((item) => item.source === 'teacher' && item.published));
+    const refresh = () => {
+      setPublishedQuizzes(getQuizzes().filter((item) => item.source === 'teacher' && item.published));
+      setAttempts(getAttempts());
+    };
     refresh();
     window.addEventListener('scholarmate:changed', refresh);
     return () => window.removeEventListener('scholarmate:changed', refresh);
@@ -41,78 +91,40 @@ export default function StudentQuizCenter() {
     loadPublishedQuizzes(firestore, user).then((remoteQuizzes) => {
       if (remoteQuizzes.length) setPublishedQuizzes(remoteQuizzes);
     }).catch(() => undefined);
+    loadAttempts(firestore, user).then((remoteAttempts) => {
+      if (remoteAttempts.length) setAttempts(remoteAttempts);
+    }).catch(() => undefined);
   }, [firestore, isUserLoading, user]);
-  
-  const [fileData, setFileData] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [pdfText, setPdfText] = useState('');
-  const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
-  const [pdfTotalPages, setPdfTotalPages] = useState(0);
-  const [pdfRenderedPages, setPdfRenderedPages] = useState(0);
-  const [pdfTruncated, setPdfTruncated] = useState(false);
-  const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Quiz taking state
-  const [activeQuestion, setActiveQuestion] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
-  const [checkedAnswers, setCheckedAnswers] = useState<Record<number, boolean>>({}); // Tracks if a question has been "Checked" for feedback
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [score, setScore] = useState(0);
+  // One-shot handoffs (quiz from notes, practice from Weak Areas).
+  useEffect(() => {
+    if (seedConsumed.current) return;
+    seedConsumed.current = true;
+    const seed = takeStudySeed('quiz');
+    if (!seed) return;
+    if (seed.sourceId) {
+      setPickerSeed({ sourceId: seed.sourceId, topicTitle: seed.topicTitle });
+      toast({ title: 'Material selected for you', description: seed.label });
+    } else if (seed.text) {
+      setSeedMaterial({ label: seed.label, text: seed.text, topic: seed.topic });
+      toast({ title: 'Material ready', description: seed.label });
+    }
+  }, [toast]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    const isPdf = file.type === 'application/pdf' || extension === 'pdf';
-    const supported = file.type.startsWith('image/') || isPdf || extension === 'docx' || extension === 'pptx';
-    if (!supported) {
-      toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
-      return;
-    }
-    setFileName(file.name);
-    setPdfText('');
-    setPdfPageImages([]);
-    setPdfTotalPages(0);
-    setPdfRenderedPages(0);
-    setPdfTruncated(false);
-    setGeminiFileUri(null);
-    setPdfIngestionLoading(isPdf);
-    try {
-      const dataUri = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read file.'));
-        reader.onerror = () => reject(new Error('Could not read file.'));
-        reader.readAsDataURL(file);
-      });
-      setFileData(dataUri);
-      if (isPdf) {
-        try {
-          console.log('[PDF upload] Files API path started:', { fileName: file.name, sizeBytes: file.size });
-          const uploaded = await uploadPdfForGemini(file);
-          console.log('[PDF upload] Files API path completed:', { fileName: uploaded.fileName, state: uploaded.state, hasFileUri: Boolean(uploaded.fileUri) });
-          setGeminiFileUri(uploaded.fileUri);
-          return;
-        } catch (error) {
-          console.error('[PDF upload] Files API path failed; using browser OCR fallback:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
-        }
-        const prepared = await preparePdfForUpload(file);
-        setPdfText(prepared.text);
-        setPdfPageImages(prepared.pageImages);
-        setPdfTotalPages(prepared.totalPages);
-        setPdfRenderedPages(prepared.renderedPages);
-        setPdfTruncated(prepared.truncated);
-      }
-    } catch (error) {
-      setFileData(null);
-      toast({ title: 'Could not read file', description: error instanceof Error ? error.message : 'Please choose the file again.', variant: 'destructive' });
-    } finally {
-      setPdfIngestionLoading(false);
-    }
-  };
+  const handleSelectionChange = useCallback((next: SourceSelection | null) => {
+    setSelection(next);
+  }, []);
+
+  const realTopics = (selection?.topicTitles || []).filter((title) => !title.startsWith('Pages '));
+  const primaryTopic = seedMaterial?.topic || (realTopics.length === 1 ? realTopics[0] : null);
+  const adaptive = resolveAdaptiveDifficulty(attempts, primaryTopic);
+  const resolvedDifficulty: DifficultyLevel = difficultyChoice === 'Adaptive' ? adaptive.level : difficultyChoice;
 
   const startPublishedQuiz = (publishedQuiz: StoredQuiz) => {
     setQuizId(publishedQuiz.id);
+    setActivePublished(publishedQuiz);
+    setActiveTopic(publishedQuiz.topic || publishedQuiz.title);
+    setLastSummary(null);
     setQuiz({ quizTitle: publishedQuiz.title, questions: publishedQuiz.questions as StudentQuizGenerationOutput['questions'] });
     setActiveQuestion(0);
     setUserAnswers({});
@@ -122,46 +134,90 @@ export default function StudentQuizCenter() {
   };
 
   const handleGenerate = async () => {
-    if (!fileData) {
-      toast({ title: "Document Required", description: "Please upload a study material file." });
-      return;
-    }
-    if (pdfIngestionLoading) {
-      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish its secure upload.' });
-      return;
-    }
-    if (fileName?.toLowerCase().endsWith('.pdf') && !geminiFileUri && !pdfText && !pdfPageImages.length) {
-      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading before a quiz can be generated.' });
+    const hasTextMaterial = Boolean(seedMaterial?.text || selection?.chunks.length);
+    const hasMedia = !seedMaterial && Boolean(selection?.media);
+    if (!hasTextMaterial && !hasMedia) {
+      toast({ title: 'Document Required', description: 'Please add study material and keep at least one topic selected.' });
       return;
     }
 
     setLoading(true);
     setQuiz(null);
+    setLastSummary(null);
+    setActivePublished(null);
     setIsSubmitted(false);
     setActiveQuestion(0);
     setUserAnswers({});
     setCheckedAnswers({});
     setScore(0);
-    const preparedPdf = geminiFileUri || (pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData);
 
     try {
-      const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, difficulty, numberOfQuestions: numQuestions, questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'], studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
-      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
-      const payload = await parseApiResponse<StudentQuizGenerationOutput>(response);
-      const result = payload;
+      let body: Record<string, unknown>;
+      if (seedMaterial?.text) {
+        body = {
+          studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
+          fileName: 'notes.txt',
+          difficulty: resolvedDifficulty,
+          numberOfQuestions: numQuestions,
+          questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'],
+          studyMaterialText: seedMaterial.text.slice(0, 48000),
+          focusTopics: seedMaterial.topic ? [seedMaterial.topic] : undefined,
+        };
+      } else if (selection?.chunks.length) {
+        body = {
+          studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
+          fileName: selection.sourceNames[0] || 'material.pdf',
+          difficulty: resolvedDifficulty,
+          numberOfQuestions: numQuestions,
+          questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'],
+          studyMaterialText: selection.selectedText,
+          focusTopics: realTopics.length ? realTopics : undefined,
+        };
+      } else if (selection?.media) {
+        const media = selection.media;
+        const preparedPdf = media.geminiFileUri || (media.pdfText || media.pdfPageImages.length ? TEXT_PLACEHOLDER_URI : media.fileData);
+        body = {
+          studyMaterialDataUri: preparedPdf,
+          fileName: media.fileName,
+          mimeType: media.fileName?.endsWith('.docx')
+            ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : media.fileName?.endsWith('.pptx')
+              ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+              : undefined,
+          difficulty: resolvedDifficulty,
+          numberOfQuestions: numQuestions,
+          questionTypes: ['MCQ', 'Short Answer', 'Conceptual/Scenario-based'],
+          studyMaterialText: media.pdfText || undefined,
+          pdfPageImages: media.pdfText.length <= 40 ? media.pdfPageImages : undefined,
+        };
+      } else {
+        throw new Error('No material selected.');
+      }
+
+      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await parseApiResponse<StudentQuizGenerationOutput>(response);
       const generatedId = makeId('student-quiz');
+      const topic = primaryTopic || result.quizTitle;
       setQuizId(generatedId);
+      setActiveTopic(topic);
       setQuiz(result);
-      const savedQuiz = { id: generatedId, title: result.quizTitle, questions: result.questions, source: 'student' as const, creator: 'student', published: false, createdAt: new Date().toISOString() };
+      const savedQuiz = { id: generatedId, title: result.quizTitle, questions: result.questions, source: 'student' as const, creator: 'student', published: false, createdAt: new Date().toISOString(), topic };
       saveQuiz(savedQuiz);
       void saveQuizToFirestore(firestore, user, savedQuiz).catch(() => undefined);
-      toast({ title: "Quiz Ready!", description: "AI has processed your document, including handwritten notes." });
+      toast({ title: 'Quiz Ready!', description: difficultyChoice === 'Adaptive' ? `Adaptive level: ${resolvedDifficulty}. ${adaptive.reason}` : 'Your quiz has been generated from the selected material.' });
     } catch (error) {
       toast({ title: 'Generation failed', description: error instanceof Error ? error.message : 'The document could not be analyzed.', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
+
+  // Quiz taking state
+  const [activeQuestion, setActiveQuestion] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [checkedAnswers, setCheckedAnswers] = useState<Record<number, boolean>>({}); // Tracks if a question has been "Checked" for feedback
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
 
   const currentQuestion = quiz?.questions[activeQuestion];
   const progress = quiz ? ((activeQuestion + 1) / quiz.questions.length) * 100 : 0;
@@ -174,24 +230,50 @@ export default function StudentQuizCenter() {
 
   const handleCheckAnswer = () => {
     if (!userAnswers[activeQuestion] || !currentQuestion) return;
-    
+
     const isCorrect = userAnswers[activeQuestion].trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
     if (isCorrect) {
-      setScore(prev => prev + 1);
+      setScore((prev) => prev + 1);
     }
-    
+
     setCheckedAnswers({ ...checkedAnswers, [activeQuestion]: true });
   };
 
   const nextQuestion = () => {
-    if (activeQuestion < (quiz?.questions.length || 0) - 1) {
-      setActiveQuestion(prev => prev + 1);
-    } else {
-      const attempt = { id: makeId('attempt'), quizId: quizId || quiz?.quizTitle || 'student-quiz', quizTitle: quiz?.quizTitle || 'Student quiz', score, total: quiz?.questions.length || 0, completedAt: new Date().toISOString() };
-      saveAttempt(attempt);
-      void saveAttemptToFirestore(firestore, user, attempt).catch(() => undefined);
-      setIsSubmitted(true);
+    if (!quiz) return;
+    if (activeQuestion < quiz.questions.length - 1) {
+      setActiveQuestion((prev) => prev + 1);
+      return;
     }
+    const perQuestion = quiz.questions.map((question, index) =>
+      checkedAnswers[index]
+        ? (userAnswers[index] || '').trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
+        : false
+    );
+    const topic = activeTopic || quiz.quizTitle;
+    const attempt: QuizAttempt = {
+      id: makeId('attempt'),
+      quizId: quizId || quiz.quizTitle || 'student-quiz',
+      quizTitle: quiz.quizTitle || 'Student quiz',
+      score,
+      total: quiz.questions.length,
+      completedAt: new Date().toISOString(),
+      topic,
+      perQuestion,
+    };
+    saveAttempt(attempt);
+    void saveAttemptToFirestore(firestore, user, attempt).catch(() => undefined);
+    if (activePublished) {
+      void saveAttemptStatToFirestore(firestore, user, activePublished.id, {
+        id: attempt.id,
+        topic,
+        score: attempt.score,
+        total: attempt.total,
+        completedAt: attempt.completedAt,
+      }).catch(() => undefined);
+    }
+    setLastSummary(buildFeedbackSummary(score, quiz.questions.length, perQuestion, quiz.questions, topic));
+    setIsSubmitted(true);
   };
 
   return (
@@ -201,7 +283,7 @@ export default function StudentQuizCenter() {
           <Sparkles className="size-3" /> AI Quiz
         </p>
         <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">Interactive AI Quiz</h1>
-        <p className="mt-1.5 text-muted-foreground">Transcribe handwritten notes and test your knowledge with real-time feedback.</p>
+        <p className="mt-1.5 text-muted-foreground">Test your knowledge with real-time feedback that adapts to your progress.</p>
       </div>
 
       {!quiz ? (
@@ -214,27 +296,41 @@ export default function StudentQuizCenter() {
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Supports PDFs, printed text, handwriting OCR, DOCX, and PPTX files.</p>
               </div>
               <div className="space-y-5 p-5 sm:p-7 md:col-span-2">
-                <div className="space-y-2">
-                  <Label>Source Document (PDF, Image, DOCX, or PPTX)</Label>
-                  <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" />
-                  <Button variant="outline" className="h-auto min-h-12 w-full rounded-2xl border-2 border-dashed py-3.5" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="mr-2 size-4 shrink-0" />
-                    <span className="min-w-0 truncate">{fileName || "Upload PDF, images, DOCX, or PPTX with no application size limit"}</span>
-                  </Button>
-                  <p className="text-xs leading-relaxed text-muted-foreground">{geminiFileUri ? 'PDF uploaded securely; full document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use secure cloud processing when possible, with on-device OCR fallback.'}</p>
-                </div>
+                {seedMaterial ? (
+                  <div className="flex items-start justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">Material ready for your quiz</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{seedMaterial.label}</p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="size-8 shrink-0 rounded-xl" aria-label="Clear material" onClick={() => setSeedMaterial(null)}>
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <SourcePicker
+                    onChange={handleSelectionChange}
+                    initialSourceId={pickerSeed?.sourceId}
+                    initialTopicTitle={pickerSeed?.topicTitle}
+                  />
+                )}
 
                 <div className="grid grid-cols-2 gap-3.5">
                   <div className="space-y-2">
                     <Label>Level</Label>
-                    <Select value={difficulty} onValueChange={(v: any) => setDifficulty(v)}>
+                    <Select value={difficultyChoice} onValueChange={(v: 'Adaptive' | DifficultyLevel) => setDifficultyChoice(v)}>
                       <SelectTrigger className="h-11 rounded-2xl"><SelectValue /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="Adaptive">Adaptive (recommended)</SelectItem>
                         <SelectItem value="Easy">Easy</SelectItem>
                         <SelectItem value="Medium">Medium</SelectItem>
                         <SelectItem value="Hard">Hard</SelectItem>
                       </SelectContent>
                     </Select>
+                    {difficultyChoice === 'Adaptive' && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Adaptive level: <span className="font-semibold text-primary">{adaptive.level}</span> — {adaptive.reason}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Questions</Label>
@@ -249,8 +345,8 @@ export default function StudentQuizCenter() {
                   </div>
                 </div>
 
-                <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25" disabled={loading || pdfIngestionLoading || !fileData} onClick={() => void handleGenerate()}>
-                  {pdfIngestionLoading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Preparing PDF...</> : loading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Decoding Material...</> : <><Sparkles className="mr-2 size-5" /> Generate Interactive Quiz</>}
+                <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25" disabled={loading || (!seedMaterial && !selection?.hasMaterial)} onClick={() => void handleGenerate()}>
+                  {loading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Decoding Material...</> : <><Sparkles className="mr-2 size-5" /> Generate Interactive Quiz</>}
                 </Button>
               </div>
             </div>
@@ -270,28 +366,67 @@ export default function StudentQuizCenter() {
           )}
         </div>
       ) : isSubmitted ? (
-        <Card className="animate-in zoom-in-95 border-border/60 p-8 text-center sm:p-12">
-          <div className="space-y-2">
-            <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">Session Review</h2>
-            <p className="text-muted-foreground">{quiz.quizTitle}</p>
-          </div>
-          <div className="mt-8 flex justify-center">
-            <div className="relative flex size-44 items-center justify-center sm:size-48">
-              <svg className="size-full -rotate-90" viewBox="0 0 192 192">
-                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-muted" />
-                <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * score / quiz.questions.length)} strokeLinecap="round" className="text-primary transition-all duration-1000" />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="font-headline text-5xl font-bold">{score}</span>
-                <span className="text-sm text-muted-foreground">out of {quiz.questions.length}</span>
+        <div className="space-y-5">
+          <Card className="animate-in zoom-in-95 border-border/60 p-8 text-center sm:p-12">
+            <div className="space-y-2">
+              <h2 className="font-headline text-3xl font-bold tracking-tight sm:text-4xl">Session Review</h2>
+              <p className="text-muted-foreground">{quiz.quizTitle}</p>
+            </div>
+            <div className="mt-8 flex justify-center">
+              <div className="relative flex size-44 items-center justify-center sm:size-48">
+                <svg className="size-full -rotate-90" viewBox="0 0 192 192">
+                  <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-muted" />
+                  <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={552} strokeDashoffset={552 - (552 * score / quiz.questions.length)} strokeLinecap="round" className="text-primary transition-all duration-1000" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-headline text-5xl font-bold">{score}</span>
+                  <span className="text-sm text-muted-foreground">out of {quiz.questions.length}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="mx-auto mt-8 max-w-sm space-y-3">
-            <Button className="h-12 w-full rounded-2xl font-semibold" onClick={() => { setQuiz(null); setQuizId(''); setFileData(null); setFileName(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
-            <Button variant="outline" className="h-12 w-full rounded-2xl font-semibold" asChild><a href="/student">Dashboard</a></Button>
-          </div>
-        </Card>
+            <div className="mx-auto mt-8 max-w-sm space-y-3">
+              <Button className="h-12 w-full rounded-2xl font-semibold" onClick={() => { setQuiz(null); setQuizId(''); setActivePublished(null); setActiveTopic(null); setLastSummary(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
+              <Button variant="outline" className="h-12 w-full rounded-2xl font-semibold" asChild><a href="/student">Dashboard</a></Button>
+            </div>
+          </Card>
+
+          {lastSummary && (
+            <Card className="animate-in fade-in border-border/60">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2.5 text-lg">
+                  <span className="grid size-9 place-items-center rounded-xl bg-accent/10 text-accent"><Target className="size-4" /></span>
+                  Your personal feedback
+                </CardTitle>
+                <CardDescription>{lastSummary.headline} You scored {lastSummary.pct}% on this quiz.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lastSummary.missed.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold">What to revise — your missed questions:</p>
+                    {lastSummary.missed.map((missed) => (
+                      <div key={missed.index} className="rounded-2xl border border-border/60 bg-white/60 p-4">
+                        <p className="text-sm font-medium leading-relaxed">Q{missed.index + 1}. {missed.questionText}</p>
+                        <p className="mt-1.5 text-sm text-muted-foreground">Correct answer: <span className="font-medium text-foreground">{missed.correctAnswer}</span></p>
+                        {missed.explanation && (
+                          <>
+                            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{missed.explanation}</p>
+                            <ExplainSimplyButton question={missed.questionText} correctAnswer={missed.correctAnswer} explanation={missed.explanation} />
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-2xl bg-emerald-500/10 p-4 text-sm font-medium text-emerald-700">Perfect round — nothing missed. Push the level up next time.</p>
+                )}
+                <div className="flex flex-col gap-2.5 rounded-2xl bg-primary/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm leading-relaxed"><span className="font-semibold text-primary">Next step:</span> {lastSummary.nextStep}</p>
+                  <Button className="shrink-0 rounded-xl" asChild><a href="/student/weak-areas">Open Weak Areas</a></Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
@@ -316,15 +451,15 @@ export default function StudentQuizCenter() {
                     {currentQuestion.options.map((opt, i) => {
                       const isSelected = userAnswers[activeQuestion] === opt;
                       const isCorrect = opt === currentQuestion.correctAnswer;
-                      let variantClasses = "border-border hover:border-primary/30 hover:bg-muted/40";
+                      let variantClasses = 'border-border hover:border-primary/30 hover:bg-muted/40';
                       if (isChecked) {
-                        if (isCorrect) variantClasses = "border-emerald-500 bg-emerald-50 text-emerald-700";
-                        else if (isSelected) variantClasses = "border-red-500 bg-red-50 text-red-700";
+                        if (isCorrect) variantClasses = 'border-emerald-500 bg-emerald-50 text-emerald-700';
+                        else if (isSelected) variantClasses = 'border-red-500 bg-red-50 text-red-700';
                       } else if (isSelected) {
-                        variantClasses = "border-primary bg-primary/5 shadow-sm";
+                        variantClasses = 'border-primary bg-primary/5 shadow-sm';
                       }
                       return (
-                        <div key={i} className={cn("flex items-center space-x-2 rounded-2xl border-2 p-3.5 transition-all sm:p-4", !isChecked && "cursor-pointer", variantClasses)}>
+                        <div key={i} className={cn('flex items-center space-x-2 rounded-2xl border-2 p-3.5 transition-all sm:p-4', !isChecked && 'cursor-pointer', variantClasses)}>
                           <RadioGroupItem value={opt} id={`opt-${i}`} className="hidden" disabled={isChecked} />
                           <Label htmlFor={`opt-${i}`} className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-medium sm:text-[15px]">
                             <span>{opt}</span>
@@ -340,7 +475,7 @@ export default function StudentQuizCenter() {
                 {currentQuestion?.type !== 'MCQ' && (
                   <div className="space-y-4 pt-2">
                     <textarea
-                      className={cn("min-h-[140px] w-full rounded-2xl border-2 bg-background p-4 text-[15px] outline-none transition-all sm:min-h-[150px]", isChecked ? "border-border bg-muted/40" : "border-border focus:border-primary")}
+                      className={cn('min-h-[140px] w-full rounded-2xl border-2 bg-background p-4 text-[15px] outline-none transition-all sm:min-h-[150px]', isChecked ? 'border-border bg-muted/40' : 'border-border focus:border-primary')}
                       placeholder="Type your answer based on the document contents..."
                       value={userAnswers[activeQuestion] || ''}
                       onChange={(e) => handleAnswerSelect(e.target.value)}
@@ -363,6 +498,7 @@ export default function StudentQuizCenter() {
                     <div>
                       <p className="mb-1 text-xs font-bold uppercase tracking-wider text-accent">AI Explanation</p>
                       <p className="text-sm leading-relaxed text-muted-foreground">{currentQuestion.explanation}</p>
+                      <ExplainSimplyButton question={currentQuestion.questionText} correctAnswer={currentQuestion.correctAnswer} explanation={currentQuestion.explanation} />
                     </div>
                   </div>
                 </div>
@@ -378,7 +514,7 @@ export default function StudentQuizCenter() {
                   </Button>
                 ) : (
                   <Button className="rounded-2xl bg-accent px-6 font-semibold hover:bg-accent/90 sm:px-8" onClick={nextQuestion}>
-                    {activeQuestion < quiz.questions.length - 1 ? "Next Question" : "Finish Review"}
+                    {activeQuestion < quiz.questions.length - 1 ? 'Next Question' : 'Finish Review'}
                     <ChevronRight className="ml-1 size-4" />
                   </Button>
                 )}

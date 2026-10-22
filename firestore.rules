@@ -146,6 +146,20 @@ service cloud.firestore {
       }
 
       /**
+       * @description Study sources in the student's library (extracted text + chapter/topic map).
+       * @path /userProfiles/{userId}/sources/{sourceId}
+       * @allow Owner of the profile can manage their own library sources.
+       * @deny Unauthenticated users or other students accessing private source materials.
+       * @principle Path-based ownership ensures privacy of source content.
+       */
+      match /sources/{sourceId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.studentId == resource.data.studentId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
        * @description Student history of quiz attempts.
        * @path /userProfiles/{userId}/quizAttempts/{quizAttemptId}
        * @allow User can view their own score history and submissions.
@@ -183,6 +197,21 @@ service cloud.firestore {
       match /questions/{questionId} {
         allow get, list: if isSignedIn() && canAccessPublishedQuiz(get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data);
         allow create, update, delete: if isSignedIn() && get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data.creatorId == request.auth.uid;
+      }
+
+      /**
+       * @description Per-attempt result stats students record on a published quiz.
+       * @path /publishedQuizzes/{quizId}/attemptStats/{attemptStatId}
+       * @allow Any signed-in student can (create) a stat carrying their own UID.
+       *        Only the quiz creator can (get/list) the stats, for class insights.
+       * @deny Students reading each other's stats; anyone editing a recorded stat.
+       * @principle Write-only for students, read-only for the owning teacher.
+       */
+      match /attemptStats/{attemptStatId} {
+        allow get, list: if isSignedIn() && get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data.creatorId == request.auth.uid;
+        allow create: if isSignedIn() && request.resource.data.studentId == request.auth.uid;
+        allow update: if false;
+        allow delete: if isSignedIn() && get(/databases/$(database)/documents/publishedQuizzes/$(quizId)).data.creatorId == request.auth.uid;
       }
     }
   }

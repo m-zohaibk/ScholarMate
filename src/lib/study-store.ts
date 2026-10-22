@@ -26,6 +26,8 @@ export type StoredQuiz = {
   creator: string;
   published: boolean;
   createdAt: string;
+  /** Topic/material this quiz belongs to — used by Weak Areas and adaptive difficulty. */
+  topic?: string;
 };
 
 export type QuizAttempt = {
@@ -35,6 +37,32 @@ export type QuizAttempt = {
   score: number;
   total: number;
   completedAt: string;
+  /** Topic the attempt belongs to (defaults to the quiz title when absent). */
+  topic?: string;
+  /** Per-question correctness, in question order — powers the feedback summary. */
+  perQuestion?: boolean[];
+};
+
+export type SourceTopic = {
+  id: string;
+  title: string;
+  startPage: number;
+  endPage: number;
+};
+
+/**
+ * A study source kept in the student's library: the document's extracted
+ * text plus its chapter/topic map, so it never has to be uploaded twice.
+ */
+export type StoredSource = {
+  id: string;
+  name: string;
+  kind: 'pdf' | 'docx' | 'pptx';
+  totalPages: number;
+  topics: SourceTopic[];
+  topicSource: 'outline' | 'whole';
+  pageTexts: string[];
+  fullText: string;
 };
 
 export type StudyTask = {
@@ -52,6 +80,7 @@ const KEYS = {
   quizzes: 'scholarmate.quizzes',
   attempts: 'scholarmate.attempts',
   tasks: 'scholarmate.tasks',
+  sources: 'scholarmate.sources',
 } as const;
 
 function canUseStorage() {
@@ -97,6 +126,18 @@ export function saveQuiz(quiz: StoredQuiz) {
   write(KEYS.quizzes, [quiz, ...getQuizzes().filter((item) => item.id !== quiz.id)]);
 }
 
+export function getSources() {
+  return read<StoredSource[]>(KEYS.sources, []);
+}
+
+export function saveSource(source: StoredSource) {
+  write(KEYS.sources, [source, ...getSources().filter((item) => item.id !== source.id && item.name !== source.name)]);
+}
+
+export function removeSource(id: string) {
+  write(KEYS.sources, getSources().filter((item) => item.id !== id));
+}
+
 export function getAttempts() {
   return read<QuizAttempt[]>(KEYS.attempts, []);
 }
@@ -138,3 +179,45 @@ export function formatDateLabel(date: Date) {
 }
 
 export const storageKeys = KEYS;
+
+/**
+ * One-shot handoff between pages (e.g. Weak Areas → Quiz, Notes → Quiz).
+ * Stored in sessionStorage and consumed exactly once by the target page.
+ */
+export type StudySeed = {
+  target: 'quiz' | 'notes';
+  label: string;
+  /** Ready-to-use study material text, when the target page should not re-read a file. */
+  text?: string;
+  /** Library source to preselect, when the material lives in the source library. */
+  sourceId?: string;
+  /** Topic title to preselect inside that source. */
+  topicTitle?: string;
+  /** Topic the generated quiz/notes belong to (drives Weak Areas + adaptive difficulty). */
+  topic?: string;
+};
+
+const SEED_KEY = 'scholarmate.seed';
+
+export function setStudySeed(seed: StudySeed) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(SEED_KEY, JSON.stringify(seed));
+  } catch {
+    // Session storage unavailable — the handoff is best-effort.
+  }
+}
+
+export function takeStudySeed(target: StudySeed['target']): StudySeed | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(SEED_KEY);
+    if (!raw) return null;
+    const seed = JSON.parse(raw) as StudySeed;
+    if (seed.target !== target) return null;
+    window.sessionStorage.removeItem(SEED_KEY);
+    return seed;
+  } catch {
+    return null;
+  }
+}

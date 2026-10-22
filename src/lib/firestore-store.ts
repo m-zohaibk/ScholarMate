@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, query, setDoc, where, type Firestore } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import type { QuizAttempt, StoredNote, StoredQuiz, StudyTask } from './study-store';
+import type { QuizAttempt, StoredNote, StoredQuiz, StoredSource, StudyTask } from './study-store';
 
 function requireUser(user: User | null) {
   return user?.uid || null;
@@ -49,6 +49,39 @@ export async function loadAttempts(firestore: Firestore, user: User | null) {
 
 export async function saveAttemptToFirestore(firestore: Firestore, user: User | null, attempt: QuizAttempt) {
   return writeUserDocument(firestore, user, 'quizAttempts', attempt.id, attempt, 'studentId');
+}
+
+export async function loadSources(firestore: Firestore, user: User | null) {
+  return readUserCollection<StoredSource>(firestore, user, 'sources');
+}
+
+export async function saveSourceToFirestore(firestore: Firestore, user: User | null, source: StoredSource) {
+  // Firestore documents are capped at 1 MiB; very large extracted texts stay
+  // in the on-device library only instead of failing the write.
+  if (JSON.stringify(source).length > 900_000) return;
+  return writeUserDocument(firestore, user, 'sources', source.id, source, 'studentId');
+}
+
+/** Anonymous-per-student result recorded on a teacher's published quiz, for class insights. */
+export type AttemptStat = {
+  id: string;
+  topic: string;
+  score: number;
+  total: number;
+  completedAt: string;
+  studentId?: string;
+};
+
+export async function saveAttemptStatToFirestore(firestore: Firestore, user: User | null, quizId: string, stat: AttemptStat) {
+  const uid = requireUser(user);
+  if (!uid) return;
+  await setDoc(doc(firestore, 'publishedQuizzes', quizId, 'attemptStats', stat.id), { ...stat, studentId: uid });
+}
+
+export async function loadAttemptStats(firestore: Firestore, user: User | null, quizId: string) {
+  if (!requireUser(user)) return [] as AttemptStat[];
+  const snapshot = await getDocs(collection(firestore, 'publishedQuizzes', quizId, 'attemptStats'));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as AttemptStat);
 }
 
 export async function loadPublishedQuizzes(firestore: Firestore, user: User | null) {

@@ -63,6 +63,8 @@ Instructions:
 2. Provide a concise executive summary.
 3. Organize content into a hierarchical structure using logical sections and headings.
 4. Extract key facts, definitions, and concepts into bullet points.
+5. Write in simple, easy wording throughout. When a hard or technical term appears, keep the term and add a short plain-words explanation in brackets.
+6. Stay faithful to the provided material only — do not add facts from outside it.
 
 {{#if studyMaterialText}}
 Extracted Study Material Text:

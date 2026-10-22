@@ -9,11 +9,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Loader2, Plus, X, CheckCircle2, Download, Save, Globe2, FileUp } from 'lucide-react';
+import { Sparkles, Loader2, Plus, X, CheckCircle2, Download, Save, Globe2, FileUp, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getQuizzes, makeId, saveQuiz, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
-import { loadPersonalQuizzes, savePublishedQuizToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
+import { loadAttemptStats, loadPersonalQuizzes, savePublishedQuizToFirestore, saveQuizToFirestore, type AttemptStat } from '@/lib/firestore-store';
 import { cn } from '@/lib/utils';
 import { uploadPdfForGemini } from '@/lib/gemini-file-client';
 
@@ -31,7 +31,9 @@ export default function TeacherQuizGenerator() {
   const [quizId, setQuizId] = useState('');
   const [published, setPublished] = useState(false);
   const [savedQuizzes, setSavedQuizzes] = useState<StoredQuiz[]>([]);
+  const [classTopics, setClassTopics] = useState<Array<{ topic: string; attempts: number; students: number; avgPct: number }>>([]);
   const syllabusFileRef = useRef<HTMLInputElement>(null);
+  const classStatsSignature = useRef('');
 
   useEffect(() => {
     const refresh = () => setSavedQuizzes(getQuizzes().filter((quiz) => quiz.source === 'teacher'));
@@ -47,6 +49,37 @@ export default function TeacherQuizGenerator() {
       if (teacherQuizzes.length) setSavedQuizzes(teacherQuizzes);
     }).catch(() => undefined);
   }, [firestore, isUserLoading, user]);
+
+  // Class insights: aggregate the per-attempt stats students record on
+  // published quizzes into class-level weak topics. Read-only for the teacher.
+  useEffect(() => {
+    if (isUserLoading || !user) return;
+    const publishedIds = savedQuizzes.filter((quiz) => quiz.published).map((quiz) => quiz.id).sort().join(',');
+    if (!publishedIds || publishedIds === classStatsSignature.current) return;
+    classStatsSignature.current = publishedIds;
+    Promise.all(publishedIds.split(',').map((quizId) => loadAttemptStats(firestore, user, quizId).catch(() => [] as AttemptStat[])))
+      .then((perQuiz) => {
+        const byTopic = new Map<string, { pcts: number[]; students: Set<string> }>();
+        for (const stat of perQuiz.flat()) {
+          const pct = stat.total > 0 ? Math.round((stat.score / stat.total) * 100) : 0;
+          const entry = byTopic.get(stat.topic) || { pcts: [], students: new Set<string>() };
+          entry.pcts.push(pct);
+          if (stat.studentId) entry.students.add(stat.studentId);
+          byTopic.set(stat.topic, entry);
+        }
+        setClassTopics(
+          Array.from(byTopic.entries())
+            .map(([topic, entry]) => ({
+              topic,
+              attempts: entry.pcts.length,
+              students: entry.students.size,
+              avgPct: Math.round(entry.pcts.reduce((sum, pct) => sum + pct, 0) / entry.pcts.length),
+            }))
+            .sort((a, b) => a.avgPct - b.avgPct)
+        );
+      })
+      .catch(() => undefined);
+  }, [firestore, isUserLoading, user, savedQuizzes]);
 
   const handleAddTag = () => {
     const tag = tagInput.trim();
@@ -159,6 +192,37 @@ export default function TeacherQuizGenerator() {
         <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">AI Quiz Generator</h1>
         <p className="mt-1.5 text-muted-foreground">Create, review, save, and publish assessments aligned with your curriculum.</p>
       </div>
+
+      <Card className="border-border/60">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2.5 text-base">
+            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary"><Users className="size-4" /></span>
+            Class Insights — where students struggle
+          </CardTitle>
+          <CardDescription>Built automatically from student attempts on your published quizzes, weakest topics first.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {classTopics.length ? (
+            <div className="space-y-2">
+              {classTopics.map((item) => (
+                <div key={item.topic} className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 p-3.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{item.topic}</p>
+                    <p className="text-xs text-muted-foreground">{item.attempts} attempt{item.attempts === 1 ? '' : 's'} · {item.students} student{item.students === 1 ? '' : 's'}</p>
+                  </div>
+                  <span className={cn('shrink-0 rounded-full px-3 py-1 text-sm font-bold', item.avgPct < 60 ? 'bg-red-500/10 text-red-600' : item.avgPct < 80 ? 'bg-amber-500/10 text-amber-600' : 'bg-emerald-500/10 text-emerald-600')}>
+                    {item.avgPct}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-muted/50 p-4 text-center text-sm text-muted-foreground">
+              No student attempts yet. Once students take your published quizzes, the class&apos;s weak topics will appear here.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
         <div className="space-y-5 lg:col-span-1">

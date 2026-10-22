@@ -14,6 +14,7 @@ import {
   Sparkles,
   Menu,
   GraduationCap,
+  Target,
 } from 'lucide-react';
 import {
   Sheet,
@@ -34,6 +35,7 @@ const NAV = {
     { label: 'Dashboard', href: '/student', icon: LayoutDashboard, blurb: 'Overview & activity' },
     { label: 'Study Notes', href: '/student/notes', icon: FileText, blurb: 'AI-structured notes' },
     { label: 'Quizzes', href: '/student/quizzes', icon: PenTool, blurb: 'Test yourself' },
+    { label: 'Weak Areas', href: '/student/weak-areas', icon: Target, blurb: 'Knowledge-gap detection' },
     { label: 'Study Schedule', href: '/student/schedule', icon: Calendar, blurb: 'Plan sessions' },
   ],
   teacher: [

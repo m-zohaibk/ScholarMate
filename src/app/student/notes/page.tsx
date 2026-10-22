@@ -1,41 +1,55 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { StudentStructuredNotesOutput } from '@/ai/flows/student-structured-notes';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Sparkles, Loader2, Download, Copy, ListTree, Highlighter, Upload, History } from 'lucide-react';
+import { FileText, Sparkles, Loader2, Download, Copy, ListTree, Highlighter, History, PenTool, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getNotes, makeId, saveNote, type StoredNote } from '@/lib/study-store';
+import { getNotes, makeId, saveNote, setStudySeed, takeStudySeed, type StoredNote } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
-import { preparePdfForUpload } from '@/lib/browser-pdf';
 import { parseApiResponse } from '@/lib/api-response';
-import { uploadPdfForGemini } from '@/lib/gemini-file-client';
+import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
+import { chunksForText, type StudyChunk } from '@/lib/source-inspect';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
   return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
 }
 
+type NoteSection = StudentStructuredNotesOutput['sections'][number];
+
+/** A one-page revision sheet collected locally from the generated points — no extra AI call. */
+function buildRevisionSection(sections: NoteSection[]): NoteSection | null {
+  const subsections = sections
+    .map((section) => ({
+      subheading: section.heading,
+      points: section.subsections.flatMap((subsection) => subsection.points).slice(0, 3),
+    }))
+    .filter((subsection) => subsection.points.length)
+    .slice(0, 8);
+  if (!subsections.length) return null;
+  return { heading: 'Quick Revision Sheet', subsections };
+}
+
+const TEXT_PLACEHOLDER_URI = 'data:application/pdf;base64,AA==';
+
 export default function StudentNotesGenerator() {
   const { toast } = useToast();
+  const router = useRouter();
   const { firestore, user, isUserLoading } = useFirebase();
   const [loading, setLoading] = useState(false);
-  const [pdfIngestionLoading, setPdfIngestionLoading] = useState(false);
-  const [fileData, setFileData] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [pdfText, setPdfText] = useState('');
-  const [pdfPageImages, setPdfPageImages] = useState<string[]>([]);
-  const [pdfTotalPages, setPdfTotalPages] = useState(0);
-  const [pdfRenderedPages, setPdfRenderedPages] = useState(0);
-  const [pdfTruncated, setPdfTruncated] = useState(false);
-  const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  const [selection, setSelection] = useState<SourceSelection | null>(null);
+  const [seedMaterial, setSeedMaterial] = useState<{ label: string; text: string } | null>(null);
+  const [pickerSeed, setPickerSeed] = useState<{ sourceId: string; topicTitle?: string } | null>(null);
   const [detailLevel, setDetailLevel] = useState<'summary' | 'detailed'>('detailed');
   const [notes, setNotes] = useState<StoredNote | null>(null);
   const [savedNotes, setSavedNotes] = useState<StoredNote[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const seedConsumed = useRef(false);
 
   useEffect(() => {
     const refresh = () => setSavedNotes(getNotes());
@@ -53,86 +67,144 @@ export default function StudentNotesGenerator() {
     }).catch(() => undefined);
   }, [firestore, isUserLoading, user]);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    const isPdf = file.type === 'application/pdf' || extension === 'pdf';
-    const supported = file.type.startsWith('image/') || isPdf || extension === 'docx' || extension === 'pptx';
-    if (!supported) {
-      toast({ title: 'Unsupported file', description: 'Choose a PDF, image, DOCX, or PPTX file.', variant: 'destructive' });
-      return;
+  // One-shot handoffs (e.g. "Revision notes" from the Weak Areas page).
+  useEffect(() => {
+    if (seedConsumed.current) return;
+    seedConsumed.current = true;
+    const seed = takeStudySeed('notes');
+    if (!seed) return;
+    if (seed.sourceId) {
+      setPickerSeed({ sourceId: seed.sourceId, topicTitle: seed.topicTitle });
+      toast({ title: 'Material selected for you', description: seed.label });
+    } else if (seed.text) {
+      setSeedMaterial({ label: seed.label, text: seed.text });
+      toast({ title: 'Material ready', description: seed.label });
     }
-    setFileName(file.name);
-    setPdfText('');
-    setPdfPageImages([]);
-    setPdfTotalPages(0);
-    setPdfRenderedPages(0);
-    setPdfTruncated(false);
-    setGeminiFileUri(null);
-    setPdfIngestionLoading(isPdf);
-    try {
-      const dataUri = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read file.'));
-        reader.onerror = () => reject(new Error('Could not read file.'));
-        reader.readAsDataURL(file);
-      });
-      setFileData(dataUri);
-      if (isPdf) {
+  }, [toast]);
+
+  const handleSelectionChange = useCallback((next: SourceSelection | null) => {
+    setSelection(next);
+  }, []);
+
+  const requestChunkNotes = async (chunk: StudyChunk): Promise<StudentStructuredNotesOutput> => {
+    const body = JSON.stringify({
+      studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
+      fileName: chunk.sourceName,
+      detailLevel: 'detailed',
+      keywordsToFocus: [chunk.label],
+      studyMaterialText: chunk.text,
+    });
+    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    return parseApiResponse<StudentStructuredNotesOutput>(response);
+  };
+
+  /** Detailed-complete generation: one call per part, then the parts are joined as-is. */
+  const generateDetailedFromChunks = async (chunks: StudyChunk[]) => {
+    const outputs: StudentStructuredNotesOutput[] = [];
+    const failed: string[] = [];
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      setProgress({ done: index, total: chunks.length, label: chunk.label });
+      try {
+        outputs.push(await requestChunkNotes(chunk));
+      } catch {
         try {
-          console.log('[PDF upload] Files API path started:', { fileName: file.name, sizeBytes: file.size });
-          const uploaded = await uploadPdfForGemini(file);
-          console.log('[PDF upload] Files API path completed:', { fileName: uploaded.fileName, state: uploaded.state, hasFileUri: Boolean(uploaded.fileUri) });
-          setGeminiFileUri(uploaded.fileUri);
-          return;
-        } catch (error) {
-          console.error('[PDF upload] Files API path failed; using browser OCR fallback:', { name: error instanceof Error ? error.name : 'UnknownError', message: error instanceof Error ? error.message : String(error) });
+          outputs.push(await requestChunkNotes(chunk));
+        } catch {
+          failed.push(chunk.label);
         }
-        const prepared = await preparePdfForUpload(file);
-        setPdfText(prepared.text);
-        setPdfPageImages(prepared.pageImages);
-        setPdfTotalPages(prepared.totalPages);
-        setPdfRenderedPages(prepared.renderedPages);
-        setPdfTruncated(prepared.truncated);
       }
-    } catch (error) {
-      setFileData(null);
-      toast({ title: 'Could not read file', description: error instanceof Error ? error.message : 'Please choose the file again.', variant: 'destructive' });
-    } finally {
-      setPdfIngestionLoading(false);
     }
+    setProgress({ done: chunks.length, total: chunks.length, label: '' });
+    if (!outputs.length) {
+      throw new Error('The document could not be analyzed. Please try again.');
+    }
+    const sections = outputs.flatMap((output) => output.sections);
+    const revision = buildRevisionSection(sections);
+    return {
+      title: outputs[0].title,
+      summary: outputs.map((output) => output.summary).filter(Boolean).join(' '),
+      sections: revision ? [...sections, revision] : sections,
+      failed,
+    };
+  };
+
+  const generateSummaryFromText = async (text: string, fileName: string) => {
+    const body = JSON.stringify({
+      studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
+      fileName,
+      detailLevel: 'summary',
+      studyMaterialText: text.slice(0, 48000),
+    });
+    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    return parseApiResponse<StudentStructuredNotesOutput>(response);
+  };
+
+  const generateFromMedia = async () => {
+    const media = selection?.media;
+    if (!media) throw new Error('No document selected.');
+    const preparedPdf = media.geminiFileUri || (media.pdfText || media.pdfPageImages.length ? TEXT_PLACEHOLDER_URI : media.fileData);
+    const body = JSON.stringify({
+      studyMaterialDataUri: preparedPdf,
+      fileName: media.fileName,
+      mimeType: media.fileName?.endsWith('.docx')
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : media.fileName?.endsWith('.pptx')
+          ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          : undefined,
+      detailLevel,
+      studyMaterialText: media.pdfText || undefined,
+      pdfPageImages: media.pdfText.length <= 40 ? media.pdfPageImages : undefined,
+    });
+    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    return parseApiResponse<StudentStructuredNotesOutput>(response);
   };
 
   const handleGenerate = async () => {
-    if (!fileData) {
-      toast({ title: 'Document required', description: 'Please upload a study document first.' });
+    const chunks = seedMaterial
+      ? chunksForText(seedMaterial.label, seedMaterial.label, seedMaterial.text)
+      : selection?.chunks || [];
+    const hasMedia = !seedMaterial && Boolean(selection?.media);
+
+    if (!chunks.length && !hasMedia) {
+      toast({ title: 'Document required', description: 'Please add a study document and keep at least one topic selected.' });
       return;
     }
-    if (pdfIngestionLoading) {
-      toast({ title: 'PDF is still preparing', description: 'Wait for the PDF to finish its secure upload.' });
-      return;
-    }
-    if (fileName?.toLowerCase().endsWith('.pdf') && !geminiFileUri && !pdfText && !pdfPageImages.length) {
-      toast({ title: 'PDF is not ready', description: 'The PDF must finish uploading before notes can be generated.' });
-      return;
-    }
+
     setLoading(true);
-    const preparedPdf = geminiFileUri || (pdfText || pdfPageImages.length ? 'data:application/pdf;base64,AA==' : fileData);
+    setProgress(null);
     try {
-      const requestBody = JSON.stringify({ studyMaterialDataUri: preparedPdf, fileName, mimeType: fileName?.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : fileName?.endsWith('.pptx') ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation' : undefined, detailLevel, studyMaterialText: pdfText || undefined, pdfPageImages: pdfText.length <= 40 ? pdfPageImages : undefined });
-      const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: requestBody });
-      const payload = await parseApiResponse<StudentStructuredNotesOutput>(response);
-      const result = payload;
-      const stored: StoredNote = { ...result, id: makeId('note'), sourceName: fileName || 'Study material', detailLevel, createdAt: new Date().toISOString() };
+      let result: StudentStructuredNotesOutput & { failed?: string[] };
+      let sourceName: string;
+      if (chunks.length && detailLevel === 'detailed') {
+        result = await generateDetailedFromChunks(chunks);
+        sourceName = seedMaterial?.label || selection?.sourceNames.join(', ') || 'Study material';
+      } else if (chunks.length) {
+        result = await generateSummaryFromText(selection?.selectedText || chunks.map((chunk) => chunk.text).join('\n\n'), chunks[0].sourceName);
+        sourceName = seedMaterial?.label || selection?.sourceNames.join(', ') || 'Study material';
+      } else {
+        result = await generateFromMedia();
+        sourceName = selection?.media?.fileName || 'Study material';
+      }
+
+      const stored: StoredNote = { ...result, id: makeId('note'), sourceName, detailLevel, createdAt: new Date().toISOString() };
       saveNote(stored);
       void saveNoteToFirestore(firestore, user, stored).catch(() => undefined);
       setNotes(stored);
-      toast({ title: 'Notes generated', description: 'Your structured notes were saved automatically.' });
+      if (result.failed?.length) {
+        toast({
+          title: 'Notes generated with gaps',
+          description: `These parts could not be generated: ${result.failed.join('; ')}. Everything else is complete — try generating again for the missing parts.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Notes generated', description: 'Your structured notes were saved automatically.' });
+      }
     } catch (error) {
       toast({ title: 'Generation failed', description: error instanceof Error ? error.message : 'The document could not be analyzed.', variant: 'destructive' });
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   };
 
@@ -157,6 +229,14 @@ export default function StudentNotesGenerator() {
     URL.revokeObjectURL(url);
   };
 
+  const createQuizFromNotes = () => {
+    if (!notes) return;
+    setStudySeed({ target: 'quiz', label: `Quiz from notes: ${notes.title}`, text: notesAsText(notes), topic: notes.title });
+    router.push('/student/quizzes');
+  };
+
+  const canGenerate = Boolean(seedMaterial || selection?.hasMaterial);
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
       <div>
@@ -177,27 +257,42 @@ export default function StudentNotesGenerator() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5 p-5 sm:p-6">
-              <div className="space-y-2">
-                <Label htmlFor="notes-upload">Study Document (PDF, Image, DOCX, or PPTX)</Label>
-                <input id="notes-upload" type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="application/pdf,image/*,.docx,.pptx" />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="group flex w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-muted/30 p-7 transition-all hover:border-primary/40 hover:bg-primary/[0.04] sm:p-8">
-                  <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-110"><Upload className="size-6" /></span>
-                  <span className="text-center">
-                    <span className="block font-semibold">{fileName || 'Click to upload document'}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">PDF, images, DOCX, or PPTX with no application size limit</span>
-                    <span className="mt-1.5 block text-xs font-medium text-primary">{geminiFileUri ? 'PDF uploaded securely; full document understanding will be used.' : pdfTotalPages ? `Scanned PDF: ${pdfRenderedPages} of ${pdfTotalPages} page${pdfTotalPages === 1 ? '' : 's'} prepared for OCR${pdfTruncated ? ' due to request limits' : ''}.` : 'Scanned PDFs use secure cloud processing when possible, with on-device OCR fallback.'}</span>
-                  </span>
-                </button>
-              </div>
+              {seedMaterial ? (
+                <div className="flex items-start justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Material handed over for revision</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{seedMaterial.label}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="size-8 shrink-0 rounded-xl" aria-label="Clear handed-over material" onClick={() => setSeedMaterial(null)}>
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              ) : (
+                <SourcePicker
+                  onChange={handleSelectionChange}
+                  initialSourceId={pickerSeed?.sourceId}
+                  initialTopicTitle={pickerSeed?.topicTitle}
+                />
+              )}
               <div className="space-y-2.5">
                 <Label>Detail Level</Label>
                 <Tabs value={detailLevel} onValueChange={(value) => setDetailLevel(value as 'summary' | 'detailed')} className="w-full">
                   <TabsList className="grid h-11 w-full grid-cols-2 rounded-2xl bg-muted/60 p-1"><TabsTrigger value="summary" className="rounded-xl">Summary</TabsTrigger><TabsTrigger value="detailed" className="rounded-xl">Detailed</TabsTrigger></TabsList>
                 </Tabs>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {detailLevel === 'summary'
+                    ? 'One fast pass over the selected material — the main points only.'
+                    : 'Complete notes in easy wording, generated part by part so almost nothing is missed. Takes longer on big documents.'}
+                </p>
               </div>
-              <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || pdfIngestionLoading || !fileData} onClick={() => void handleGenerate()}>
-                {pdfIngestionLoading ? <><Loader2 className="mr-2 size-5 animate-spin" />Preparing PDF...</> : loading ? <><Loader2 className="mr-2 size-5 animate-spin" />Analyzing Document...</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
+              <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || !canGenerate} onClick={() => void handleGenerate()}>
+                {loading ? <><Loader2 className="mr-2 size-5 animate-spin" />{progress ? `Generating part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'Analyzing Document...'}</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
               </Button>
+              {loading && progress && progress.total > 1 && (
+                <p className="text-center text-xs text-muted-foreground">
+                  {progress.done} of {progress.total} parts complete{progress.label ? ` — now: ${progress.label}` : ''}
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -224,7 +319,7 @@ export default function StudentNotesGenerator() {
             <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-white/40 p-8 text-center sm:min-h-[500px]">
               <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-primary/10 to-accent/10"><ListTree className="size-9 text-primary" /></span>
               <h3 className="mt-5 font-headline text-xl font-bold">No Notes Yet</h3>
-              <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">Upload your document to generate structured notes using Vision AI.</p>
+              <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">Add your documents, pick the chapters you need, and generate structured notes.</p>
             </div>
           ) : (
             <div className="animate-in fade-in slide-in-from-bottom-4 space-y-5 duration-500">
@@ -234,6 +329,9 @@ export default function StudentNotesGenerator() {
                   <p className="mt-0.5 text-xs text-muted-foreground">From {notes.sourceName}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" className="rounded-2xl" onClick={createQuizFromNotes}>
+                    <PenTool className="mr-2 size-4" /> Create quiz from these notes
+                  </Button>
                   <Button variant="outline" size="icon" className="rounded-2xl" onClick={copyNotes} aria-label="Copy notes"><Copy className="size-4" /></Button>
                   <Button variant="outline" size="icon" className="rounded-2xl" onClick={downloadNotes} aria-label="Download notes"><Download className="size-4" /></Button>
                 </div>
