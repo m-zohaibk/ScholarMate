@@ -15,7 +15,7 @@ import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
 import { fetchJsonWithRetry } from '@/lib/api-response';
 import { GenerationProgress } from '@/components/GenerationProgress';
 import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
-import { chunksForText, type StudyChunk } from '@/lib/source-inspect';
+import { CHUNK_CHAR_LIMIT, chunksForText, type StudyChunk } from '@/lib/source-inspect';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
   return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
@@ -38,12 +38,94 @@ function buildRevisionSection(sections: NoteSection[]): NoteSection | null {
 
 const TEXT_PLACEHOLDER_URI = 'data:application/pdf;base64,AA==';
 
+/** One part of a detailed generation: the text for a single AI call. */
+type GenerationPart = {
+  label: string;
+  labels: string[];
+  sourceName: string;
+  text: string;
+};
+
+/**
+ * How many parts generate at the same time. Parts are fully independent
+ * calls, so running them side by side cuts a big document's wait from the
+ * sum of every part down to roughly the slowest handful.
+ */
+const PART_CONCURRENCY = 10;
+
+/** Small neighbouring parts merge into one call, to cut the call count. */
+const MAX_PARTS_PER_CALL = 3;
+
+/**
+ * Group the selected chunks into generation parts. Neighbouring chunks from
+ * the same source merge while their combined text stays within the
+ * per-call size detailed mode already trusts (CHUNK_CHAR_LIMIT), so a
+ * merged call carries no more material than the largest single calls do
+ * today — coverage per call is unchanged, there are just fewer calls.
+ */
+function groupChunksForGeneration(chunks: StudyChunk[]): GenerationPart[] {
+  const grouped: StudyChunk[][] = [];
+  for (const chunk of chunks) {
+    const current = grouped[grouped.length - 1];
+    const currentLength = current?.reduce((sum, item) => sum + item.text.length, 0) ?? 0;
+    if (
+      current &&
+      current[0].sourceName === chunk.sourceName &&
+      current.length < MAX_PARTS_PER_CALL &&
+      currentLength + chunk.text.length <= CHUNK_CHAR_LIMIT
+    ) {
+      current.push(chunk);
+    } else {
+      grouped.push([chunk]);
+    }
+  }
+  return grouped.map((group) => ({
+    label: group.length === 1 ? group[0].label : `${group[0].label} + ${group.length - 1} more part${group.length === 2 ? '' : 's'}`,
+    labels: group.map((chunk) => chunk.label),
+    sourceName: group[0].sourceName,
+    text: group.length === 1 ? group[0].text : group.map((chunk) => `${chunk.label}\n${chunk.text}`).join('\n\n'),
+  }));
+}
+
+/** Read-only rendering of note sections — shared by the finished note and the live preview. */
+function NoteSections({ sections }: { sections: NoteSection[] }) {
+  return (
+    <>
+      {sections.map((section) => (
+        <div key={section.heading} className="space-y-3.5">
+          <h3 className="flex items-center gap-2.5 font-headline text-xl font-bold tracking-tight">
+            <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-accent" />{section.heading}
+          </h3>
+          <div className="grid gap-3.5">
+            {section.subsections.map((subsection) => (
+              <Card key={subsection.subheading} className="border-border/60 bg-white/70">
+                <CardHeader className="pb-2.5 pt-4"><CardTitle className="text-[15px] font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader>
+                <CardContent className="pt-0">
+                  <ul className="space-y-2.5">
+                    {subsection.points.map((point) => (
+                      <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
+                        <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" /><span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function StudentNotesGenerator() {
   const { toast } = useToast();
   const router = useRouter();
   const { firestore, user, isUserLoading } = useFirebase();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  /** Notes assembled so far during a detailed generation — shown live as parts finish. */
+  const [streamed, setStreamed] = useState<{ title: string; summary: string; sections: NoteSection[] } | null>(null);
   const [selection, setSelection] = useState<SourceSelection | null>(null);
   const [seedMaterial, setSeedMaterial] = useState<{ label: string; text: string } | null>(null);
   const [pickerSeed, setPickerSeed] = useState<{ sourceId: string; topicTitle?: string } | null>(null);
@@ -93,47 +175,93 @@ export default function StudentNotesGenerator() {
     setSelection(next);
   }, []);
 
-  const requestChunkNotes = async (chunk: StudyChunk): Promise<StudentStructuredNotesOutput> => {
-    // No retry here: generateDetailedFromChunks already retries a failed part once.
+  const requestPartNotes = async (part: GenerationPart): Promise<StudentStructuredNotesOutput> => {
+    // No retry here: the caller retries a failed part once, after a pause.
     return fetchJsonWithRetry<StudentStructuredNotesOutput>(
       '/api/student/notes',
       {
         studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
-        fileName: chunk.sourceName,
+        fileName: part.sourceName,
         detailLevel: 'detailed',
-        keywordsToFocus: [chunk.label],
-        studyMaterialText: chunk.text,
+        keywordsToFocus: part.labels,
+        studyMaterialText: part.text,
       },
       { retries: 0 }
     );
   };
 
-  /** Detailed-complete generation: one call per part, then the parts are joined as-is. */
+  /**
+   * Detailed-complete generation: parts run in parallel (a pool of
+   * PART_CONCURRENCY workers), small neighbouring parts share one call,
+   * and finished parts stream into the preview in document order as they
+   * complete. A part that fails is retried once; if it still fails it is
+   * reported by name and everything else is kept.
+   */
   const generateDetailedFromChunks = async (chunks: StudyChunk[]) => {
-    const outputs: StudentStructuredNotesOutput[] = [];
+    const parts = groupChunksForGeneration(chunks);
+    const outputs: Array<StudentStructuredNotesOutput | undefined> = new Array(parts.length);
     const failed: string[] = [];
-    for (let index = 0; index < chunks.length; index += 1) {
-      const chunk = chunks[index];
-      setProgress({ done: index, total: chunks.length, label: chunk.label });
+    const running = new Map<number, string>();
+    let completed = 0;
+    let cursor = 0;
+
+    const publishProgress = () => {
+      const current = running.values().next().value as string | undefined;
+      setProgress({ done: completed, total: parts.length, label: current ?? '' });
+    };
+
+    const publishStream = () => {
+      const ready = outputs.filter((output): output is StudentStructuredNotesOutput => Boolean(output));
+      if (!ready.length) return;
+      const sectionsSoFar = ready.flatMap((output) => output.sections);
+      const revision = buildRevisionSection(sectionsSoFar);
+      setStreamed({
+        title: ready[0].title,
+        summary: ready.map((output) => output.summary).filter(Boolean).join(' '),
+        sections: revision ? [...sectionsSoFar, revision] : sectionsSoFar,
+      });
+    };
+
+    const runPart = async (index: number) => {
+      const part = parts[index];
+      running.set(index, part.label);
+      publishProgress();
       try {
-        outputs.push(await requestChunkNotes(chunk));
+        outputs[index] = await requestPartNotes(part);
       } catch {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
         try {
-          outputs.push(await requestChunkNotes(chunk));
+          outputs[index] = await requestPartNotes(part);
         } catch {
-          failed.push(chunk.label);
+          failed.push(part.label);
         }
+      } finally {
+        running.delete(index);
+        completed += 1;
+        publishProgress();
+        publishStream();
       }
-    }
-    setProgress({ done: chunks.length, total: chunks.length, label: '' });
-    if (!outputs.length) {
+    };
+
+    const workers = Array.from({ length: Math.min(PART_CONCURRENCY, parts.length) }, async () => {
+      while (cursor < parts.length) {
+        const index = cursor;
+        cursor += 1;
+        await runPart(index);
+      }
+    });
+    await Promise.all(workers);
+    setProgress({ done: parts.length, total: parts.length, label: '' });
+
+    const finished = outputs.filter((output): output is StudentStructuredNotesOutput => Boolean(output));
+    if (!finished.length) {
       throw new Error('The document could not be analyzed. Please try again.');
     }
-    const sections = outputs.flatMap((output) => output.sections);
+    const sections = finished.flatMap((output) => output.sections);
     const revision = buildRevisionSection(sections);
     return {
-      title: outputs[0].title,
-      summary: outputs.map((output) => output.summary).filter(Boolean).join(' '),
+      title: finished[0].title,
+      summary: finished.map((output) => output.summary).filter(Boolean).join(' '),
       sections: revision ? [...sections, revision] : sections,
       failed,
     };
@@ -179,6 +307,7 @@ export default function StudentNotesGenerator() {
 
     setLoading(true);
     setProgress(null);
+    setStreamed(null);
     try {
       let result: StudentStructuredNotesOutput & { failed?: string[] };
       let sourceName: string;
@@ -211,6 +340,7 @@ export default function StudentNotesGenerator() {
     } finally {
       setLoading(false);
       setProgress(null);
+      setStreamed(null);
     }
   };
 
@@ -288,17 +418,17 @@ export default function StudentNotesGenerator() {
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {detailLevel === 'summary'
                     ? 'One fast pass over the selected material — the main points only.'
-                    : 'Complete notes in easy wording, generated part by part so almost nothing is missed. Takes longer on big documents.'}
+                    : 'Complete notes in easy wording. Parts generate in parallel so almost nothing is missed — even big documents finish far faster than before.'}
                 </p>
               </div>
               <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || !canGenerate} onClick={() => void handleGenerate()}>
-                {loading ? <><Loader2 className="mr-2 size-5 animate-spin" />{progress ? `Generating part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'Analyzing Document...'}</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
+                {loading ? <><Loader2 className="mr-2 size-5 animate-spin" />{progress ? `Generating… ${progress.done} of ${progress.total} parts done` : 'Analyzing Document...'}</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
               </Button>
               {loading && (
                 <GenerationProgress
-                  title={progress && progress.total > 1 ? `Generating part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}` : 'Generating your notes'}
+                  title={progress && progress.total > 1 ? `Generating your notes — ${progress.done} of ${progress.total} parts complete` : 'Generating your notes'}
                   hint={progress && progress.total > 1
-                    ? `${progress.done} of ${progress.total} parts complete${progress.label ? ` — now: ${progress.label}` : ''}. Finished parts are kept, even if one needs another try.`
+                    ? `${progress.done} of ${progress.total} parts complete${progress.label ? ` — now: ${progress.label}` : ''}. Parts generate in parallel and appear below as they finish — finished parts are always kept.`
                     : 'Reading your material and writing structured notes. The first generation after a while can take up to a minute.'}
                 />
               )}
@@ -324,7 +454,27 @@ export default function StudentNotesGenerator() {
         </div>
 
         <div className="lg:col-span-7">
-          {!notes ? (
+          {!notes && streamed ? (
+            <div className="animate-in fade-in space-y-5 duration-500">
+              <div className="flex items-center gap-2.5 rounded-2xl border border-primary/20 bg-primary/[0.05] px-4 py-3 text-sm font-medium text-primary">
+                <Loader2 className="size-4 shrink-0 animate-spin" />
+                Your notes are appearing as each part finishes{progress ? ` — ${progress.done} of ${progress.total} parts ready` : ''}.
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate font-headline text-2xl font-bold tracking-tight text-primary">{streamed.title}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Still generating — this preview fills in part by part, in document order.</p>
+              </div>
+              {streamed.summary ? (
+                <Card className="overflow-hidden border-primary/15">
+                  <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 py-3.5">
+                    <div className="flex items-center gap-2 text-primary"><Highlighter className="size-4" /><span className="text-xs font-bold uppercase tracking-wider">Executive Summary</span></div>
+                  </CardHeader>
+                  <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{streamed.summary}</CardContent>
+                </Card>
+              ) : null}
+              <NoteSections sections={streamed.sections} />
+            </div>
+          ) : !notes ? (
             <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-white/40 p-8 text-center sm:min-h-[500px]">
               <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-primary/10 to-accent/10"><ListTree className="size-9 text-primary" /></span>
               <h3 className="mt-5 font-headline text-xl font-bold">No Notes Yet</h3>
@@ -351,29 +501,7 @@ export default function StudentNotesGenerator() {
                 </CardHeader>
                 <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{notes.summary}</CardContent>
               </Card>
-              {notes.sections.map((section) => (
-                <div key={section.heading} className="space-y-3.5">
-                  <h3 className="flex items-center gap-2.5 font-headline text-xl font-bold tracking-tight">
-                    <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-accent" />{section.heading}
-                  </h3>
-                  <div className="grid gap-3.5">
-                    {section.subsections.map((subsection) => (
-                      <Card key={subsection.subheading} className="border-border/60 bg-white/70">
-                        <CardHeader className="pb-2.5 pt-4"><CardTitle className="text-[15px] font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader>
-                        <CardContent className="pt-0">
-                          <ul className="space-y-2.5">
-                            {subsection.points.map((point) => (
-                              <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
-                                <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" /><span>{point}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <NoteSections sections={notes.sections} />
             </div>
           )}
         </div>
