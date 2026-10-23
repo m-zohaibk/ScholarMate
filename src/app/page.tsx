@@ -90,9 +90,9 @@ export default function Home() {
             <Link href="/teacher" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">Teacher Hub</Link>
           </nav>
           <div className="hidden items-center gap-3 md:flex">
-            <Button variant="ghost" asChild><Link href="/student">Sign in</Link></Button>
+            <Button variant="ghost" asChild><Link href="/login">Sign in</Link></Button>
             <Button className="rounded-xl shadow-lg shadow-primary/25" asChild>
-              <Link href="/student">Get started <ArrowRight className="ml-1 size-4" /></Link>
+              <Link href="/register">Get started <ArrowRight className="ml-1 size-4" /></Link>
             </Button>
           </div>
           <Sheet>
@@ -115,8 +115,8 @@ export default function Home() {
                   </Link>
                 ))}
                 <div className="mt-4 flex flex-col gap-2 border-t pt-4">
-                  <Button variant="outline" asChild><Link href="/student">Sign in</Link></Button>
-                  <Button asChild><Link href="/student">Get started</Link></Button>
+                  <Button variant="outline" asChild><Link href="/login">Sign in</Link></Button>
+                  <Button asChild><Link href="/register">Get started</Link></Button>
                 </div>
               </div>
             </SheetContent>
@@ -147,10 +147,10 @@ export default function Home() {
               </p>
               <div className="animate-fade-up delay-300 mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Button size="lg" className="h-12 w-full rounded-2xl px-8 text-base font-semibold shadow-xl shadow-primary/30 sm:w-auto" asChild>
-                  <Link href="/student"><BookOpen className="mr-2 size-5" /> I&apos;m a Student</Link>
+                  <Link href="/register?role=student"><BookOpen className="mr-2 size-5" /> I&apos;m a Student</Link>
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 w-full rounded-2xl bg-white/70 px-8 text-base font-semibold backdrop-blur sm:w-auto" asChild>
-                  <Link href="/teacher"><GraduationCap className="mr-2 size-5" /> I&apos;m a Teacher</Link>
+                  <Link href="/register?role=teacher"><GraduationCap className="mr-2 size-5" /> I&apos;m a Teacher</Link>
                 </Button>
               </div>
               <div className="animate-fade-up delay-300 mt-10 grid grid-cols-3 gap-4 sm:gap-8">
@@ -283,10 +283,10 @@ export default function Home() {
               <p className="mt-4 text-muted-foreground">Join ScholarMate and turn your study materials into an AI-powered learning loop today.</p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <Button size="lg" className="rounded-2xl px-8 shadow-xl shadow-primary/30" asChild>
-                  <Link href="/student">Start learning free</Link>
+                  <Link href="/register?role=student">Start learning free</Link>
                 </Button>
                 <Button size="lg" variant="outline" className="rounded-2xl bg-white/70 px-8 backdrop-blur" asChild>
-                  <Link href="/teacher">Create an assessment</Link>
+                  <Link href="/register?role=teacher">Create an assessment</Link>
                 </Button>
               </div>
             </div>

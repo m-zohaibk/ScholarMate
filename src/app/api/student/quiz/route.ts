@@ -8,6 +8,23 @@ function isGeminiPdfUri(value: unknown): value is string {
   return typeof value === 'string' && /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-z0-9-]+$/i.test(value);
 }
 
+/**
+ * The model occasionally returns a malformed response or hits a transient
+ * limit on the first attempt. Retry once automatically so a recoverable
+ * failure never reaches the student — a manual second click used to fix it.
+ */
+async function generateQuizWithRetry(input: Parameters<typeof generateStudentQuiz>[0]) {
+  try {
+    return await generateStudentQuiz(input);
+  } catch (error) {
+    const message = String((error as { originalMessage?: unknown })?.originalMessage || error);
+    const transient = /invalid json|json.*parse|parse.*json|schema validation|429|503|overloaded|unavailable/i.test(message);
+    if (!transient) throw error;
+    console.warn('[API] Student quiz generation hit a transient failure; retrying once.');
+    return generateStudentQuiz(input);
+  }
+}
+
 export async function POST(request: Request) {
   const configurationError = getGoogleAiConfigurationError();
   if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });
@@ -15,14 +32,14 @@ export async function POST(request: Request) {
     const input = await request.json();
     if (isGeminiPdfUri(input.studyMaterialDataUri)) {
       console.log('[API] Student quiz Gemini file generation started:', { fileName: input.fileName, hasFileUri: true, mediaContentType: 'application/pdf' });
-      const result = await generateStudentQuiz({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf', mediaContentType: 'application/pdf' });
+      const result = await generateQuizWithRetry({ ...input, studyMaterialDataUri: input.studyMaterialDataUri, studyMaterialText: undefined, documentFormat: 'pdf', mediaContentType: 'application/pdf' });
       console.log('[API] Student quiz Gemini file generation completed:', { fileName: input.fileName });
       return NextResponse.json({ ...result, documentFormat: 'pdf', isScannedPdf: true, ocrPages: 0, usedGeminiFile: true });
     }
     const document = await normalizeDocument(input.studyMaterialDataUri, input.fileName, input.mimeType, { text: input.studyMaterialText, pageImages: input.pdfPageImages });
     const ocrText = document.isScannedPdf ? await ocrRenderedPdfPages(document.pdfPageImages) : '';
     if (document.isScannedPdf && !ocrText) return NextResponse.json({ error: 'No readable text was found in the scanned PDF. Upload a higher-resolution scan or a clearer image.' }, { status: 422 });
-    const result = await generateStudentQuiz({ ...input, studyMaterialDataUri: document.aiDataUri, studyMaterialText: ocrText || document.extractedText || undefined, documentFormat: document.format });
+    const result = await generateQuizWithRetry({ ...input, studyMaterialDataUri: document.aiDataUri, studyMaterialText: ocrText || document.extractedText || undefined, documentFormat: document.format });
     return NextResponse.json({ ...result, documentFormat: document.format, isScannedPdf: document.isScannedPdf, ocrPages: document.pdfPageImages.length });
   } catch (error) {
     if (error instanceof DocumentInputError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422 });

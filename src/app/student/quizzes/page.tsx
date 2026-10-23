@@ -216,10 +216,13 @@ export default function StudentQuizCenter() {
   const [activeQuestion, setActiveQuestion] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [checkedAnswers, setCheckedAnswers] = useState<Record<number, boolean>>({}); // Tracks if a question has been "Checked" for feedback
+  const [evaluations, setEvaluations] = useState<Record<number, { verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }>>({});
+  const [grading, setGrading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
 
   const currentQuestion = quiz?.questions[activeQuestion];
+  const currentEvaluation = evaluations[activeQuestion];
   const progress = quiz ? ((activeQuestion + 1) / quiz.questions.length) * 100 : 0;
   const isChecked = checkedAnswers[activeQuestion];
 
@@ -228,15 +231,49 @@ export default function StudentQuizCenter() {
     setUserAnswers({ ...userAnswers, [activeQuestion]: val });
   };
 
-  const handleCheckAnswer = () => {
-    if (!userAnswers[activeQuestion] || !currentQuestion) return;
+  const handleCheckAnswer = async () => {
+    const answer = userAnswers[activeQuestion];
+    if (!answer || !currentQuestion || grading) return;
 
-    const isCorrect = userAnswers[activeQuestion].trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
-    if (isCorrect) {
-      setScore((prev) => prev + 1);
+    if (currentQuestion.type === 'MCQ') {
+      const isCorrect = answer.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
+      if (isCorrect) setScore((prev) => prev + 1);
+      setCheckedAnswers({ ...checkedAnswers, [activeQuestion]: true });
+      return;
     }
 
-    setCheckedAnswers({ ...checkedAnswers, [activeQuestion]: true });
+    // Typed answers are graded on meaning against the reference answer —
+    // a correct idea in the student's own words counts as correct.
+    setGrading(true);
+    try {
+      const response = await fetch('/api/student/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: currentQuestion.questionText,
+          referenceAnswer: currentQuestion.correctAnswer,
+          studentAnswer: answer,
+        }),
+      });
+      const result = await parseApiResponse<{ verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }>(response);
+      setEvaluations((prev) => ({ ...prev, [activeQuestion]: result }));
+      setScore((prev) => prev + (result.verdict === 'correct' ? 1 : result.verdict === 'partial' ? 0.5 : 0));
+    } catch {
+      const exact = answer.trim().toLowerCase() === currentQuestion.correctAnswer.trim().toLowerCase();
+      setEvaluations((prev) => ({
+        ...prev,
+        [activeQuestion]: {
+          verdict: exact ? 'correct' : 'incorrect',
+          feedback: exact
+            ? 'Your answer matches the reference answer.'
+            : 'Automatic grading was unavailable just now — compare your answer with the reference answer below.',
+        },
+      }));
+      if (exact) setScore((prev) => prev + 1);
+    } finally {
+      setGrading(false);
+      setCheckedAnswers((prev) => ({ ...prev, [activeQuestion]: true }));
+    }
   };
 
   const nextQuestion = () => {
@@ -245,11 +282,11 @@ export default function StudentQuizCenter() {
       setActiveQuestion((prev) => prev + 1);
       return;
     }
-    const perQuestion = quiz.questions.map((question, index) =>
-      checkedAnswers[index]
-        ? (userAnswers[index] || '').trim().toLowerCase() === question.correctAnswer.trim().toLowerCase()
-        : false
-    );
+    const perQuestion = quiz.questions.map((question, index) => {
+      if (!checkedAnswers[index]) return false;
+      if (question.type !== 'MCQ') return evaluations[index]?.verdict === 'correct';
+      return (userAnswers[index] || '').trim().toLowerCase() === question.correctAnswer.trim().toLowerCase();
+    });
     const topic = activeTopic || quiz.quizTitle;
     const attempt: QuizAttempt = {
       id: makeId('attempt'),
@@ -385,7 +422,7 @@ export default function StudentQuizCenter() {
               </div>
             </div>
             <div className="mx-auto mt-8 max-w-sm space-y-3">
-              <Button className="h-12 w-full rounded-2xl font-semibold" onClick={() => { setQuiz(null); setQuizId(''); setActivePublished(null); setActiveTopic(null); setLastSummary(null); setUserAnswers({}); setCheckedAnswers({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
+              <Button className="h-12 w-full rounded-2xl font-semibold" onClick={() => { setQuiz(null); setQuizId(''); setActivePublished(null); setActiveTopic(null); setLastSummary(null); setUserAnswers({}); setCheckedAnswers({}); setEvaluations({}); setScore(0); setIsSubmitted(false); }}>Start New Session</Button>
               <Button variant="outline" className="h-12 w-full rounded-2xl font-semibold" asChild><a href="/student">Dashboard</a></Button>
             </div>
           </Card>
@@ -481,6 +518,30 @@ export default function StudentQuizCenter() {
                       onChange={(e) => handleAnswerSelect(e.target.value)}
                       disabled={isChecked}
                     />
+                    {isChecked && currentEvaluation && (
+                      <div
+                        className={cn(
+                          'animate-in slide-in-from-top-2 rounded-2xl border-2 p-5',
+                          currentEvaluation.verdict === 'correct' && 'border-emerald-500/50 bg-emerald-50',
+                          currentEvaluation.verdict === 'partial' && 'border-amber-500/50 bg-amber-50',
+                          currentEvaluation.verdict === 'incorrect' && 'border-red-500/50 bg-red-50'
+                        )}
+                      >
+                        <p
+                          className={cn(
+                            'flex items-center gap-2 font-headline text-base font-bold',
+                            currentEvaluation.verdict === 'correct' && 'text-emerald-700',
+                            currentEvaluation.verdict === 'partial' && 'text-amber-700',
+                            currentEvaluation.verdict === 'incorrect' && 'text-red-700'
+                          )}
+                        >
+                          {currentEvaluation.verdict === 'correct' && <><CheckCircle2 className="size-5 shrink-0" /> Correct — full marks</>}
+                          {currentEvaluation.verdict === 'partial' && <><AlertCircle className="size-5 shrink-0" /> Partially correct — half marks</>}
+                          {currentEvaluation.verdict === 'incorrect' && <><XCircle className="size-5 shrink-0" /> Not quite — no marks</>}
+                        </p>
+                        <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{currentEvaluation.feedback}</p>
+                      </div>
+                    )}
                     {isChecked && (
                       <div className="animate-in slide-in-from-top-2 rounded-2xl border border-primary/15 bg-primary/5 p-5">
                         <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-primary">Reference Answer</p>
@@ -509,8 +570,8 @@ export default function StudentQuizCenter() {
                   Previous
                 </Button>
                 {!isChecked ? (
-                  <Button className="rounded-2xl px-6 font-semibold sm:px-8" disabled={!userAnswers[activeQuestion]} onClick={handleCheckAnswer}>
-                    Check Answer
+                  <Button className="rounded-2xl px-6 font-semibold sm:px-8" disabled={!userAnswers[activeQuestion] || grading} onClick={() => void handleCheckAnswer()}>
+                    {grading ? <><Loader2 className="mr-2 size-4 animate-spin" /> Grading your answer...</> : 'Check Answer'}
                   </Button>
                 ) : (
                   <Button className="rounded-2xl bg-accent px-6 font-semibold hover:bg-accent/90 sm:px-8" onClick={nextQuestion}>

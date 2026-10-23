@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { signOut as firebaseSignOut } from 'firebase/auth';
+import { useFirebase } from '@/firebase';
+import { getUserProfile, type UserProfile } from '@/lib/auth-profile';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -97,6 +100,25 @@ function NavItems({ role, onNavigate }: { role: 'teacher' | 'student'; onNavigat
 }
 
 function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavigate?: () => void }) {
+  const router = useRouter();
+  const { auth, firestore, user } = useFirebase();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getUserProfile(firestore, user.uid).then(setProfile).catch(() => undefined);
+  }, [firestore, user]);
+
+  const handleSignOut = async () => {
+    onNavigate?.();
+    try {
+      if (auth) await firebaseSignOut(auth);
+    } catch {
+      // Still leave the portal even if the sign-out call hiccups.
+    }
+    router.push('/login');
+  };
+
   return (
     <div className="flex h-full flex-col bg-gradient-to-b from-[#0d1b3e] via-[#12255a] to-[#1a2f6e]">
       <div className="px-5 pb-2 pt-6">
@@ -115,6 +137,15 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
       </div>
       <NavItems role={role} onNavigate={onNavigate} />
       <div className="space-y-1.5 border-t border-white/10 p-3">
+        <div className="flex items-center gap-3 rounded-2xl px-4 py-2">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-white">
+            {(profile?.name || user?.email || 'U').charAt(0).toUpperCase()}
+          </span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-sm font-semibold text-white">{profile?.name || 'My account'}</span>
+            <span className="block truncate text-[11px] text-white/55">{user?.email || ''}</span>
+          </span>
+        </div>
         <Link
           href="/"
           onClick={onNavigate}
@@ -122,13 +153,13 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
         >
           <Home className="size-5 shrink-0 text-white/60" /> Home
         </Link>
-        <Link
-          href="/"
-          onClick={onNavigate}
-          className="flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <LogOut className="size-5 shrink-0 text-white/60" /> Exit Module
-        </Link>
+          <LogOut className="size-5 shrink-0 text-white/60" /> Sign out
+        </button>
       </div>
     </div>
   );
