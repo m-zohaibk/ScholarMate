@@ -10,28 +10,30 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 211 71% 50%; /* #257EDC */
+    --primary: 211 71% 44%; /* #216EC0 — brand blue deepened one step so white labels on it (5.18:1) and primary text on white (5.18:1) / on background (4.63:1) all clear 4.5:1 */
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted-foreground: 215 18% 44%; /* #5C6D84 — 4.73:1 on the app background, 5.28:1 on white (was #64748B at 4.26:1 on background) */
     --accent: 247 78% 60%; /* #5E4CE6 */
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 211 71% 50%;
-    --radius: 0.75rem;
+    --ring: 211 71% 44%;
+    --radius: 1rem;
   }
 
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    /* Elevated surfaces sit one step above the base background so cards and
+       popovers read as a layer in front (base vs elevated depth). */
+    --card: 222 47% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 47% 10%;
     --popover-foreground: 210 40% 98%;
     --primary: 211 71% 50%;
     --primary-foreground: 222.2 47.4% 11.2%;
@@ -135,9 +137,48 @@
 }
 *::-webkit-scrollbar-track { background: transparent; }
 
+/* Touch targets: controls get a 44px minimum height on coarse pointers.
+   Bare anchors are excluded — inline text links keep their natural height;
+   block-style nav links already exceed 44px through their own padding. */
 @media (pointer: coarse) {
-  button, a, input, select, textarea, [role="button"] {
-    min-height: 40px;
+  button, input, select, textarea, [role="button"] {
+    min-height: 44px;
+  }
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.22);
+}
+
+/* Reduced motion: decorative animation is optional, never the only carrier
+   of meaning. Entrance, floating, and gradient animations stop; the
+   generation bar rests as a static track instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-float-slow,
+  .animate-gradient-pan {
+    animation: none;
+  }
+  .card-lift,
+  .card-lift:hover {
+    transform: none;
+    transition: none;
+  }
+  .generation-progress-bar {
+    animation: none;
+    transform: none;
+    width: 100%;
+    opacity: 0.55;
+  }
+}
+
+/* Reduced transparency: glass surfaces fall back to an opaque card surface. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-card {
+    background: hsl(var(--card));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 

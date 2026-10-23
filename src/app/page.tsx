@@ -73,7 +73,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
       {/* ---------- Nav ---------- */}
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md shadow-primary/25 ring-1 ring-white/40">
@@ -131,7 +131,7 @@ export default function Home() {
           <div className="bg-grid absolute inset-0 [mask-image:radial-gradient(70%_60%_at_50%_35%,black,transparent)]" />
           <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:pb-24 lg:pt-24">
             <div className="mx-auto max-w-4xl text-center">
-              <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-4 py-1.5 text-[13px] font-semibold text-primary shadow-sm backdrop-blur">
+              <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-4 py-1.5 text-[13px] font-semibold text-primary shadow-sm">
                 <Sparkles className="size-3.5" />
                 AI-powered study companion for students & teachers
               </div>
@@ -150,7 +150,7 @@ export default function Home() {
                 <Button size="lg" className="h-12 w-full rounded-2xl px-8 text-base font-semibold shadow-xl shadow-primary/30 sm:w-auto" asChild>
                   <Link href="/register?role=student"><BookOpen className="mr-2 size-5" /> I&apos;m a Student</Link>
                 </Button>
-                <Button size="lg" variant="outline" className="h-12 w-full rounded-2xl bg-white/70 px-8 text-base font-semibold backdrop-blur sm:w-auto" asChild>
+                <Button size="lg" variant="outline" className="h-12 w-full rounded-2xl bg-white px-8 text-base font-semibold sm:w-auto" asChild>
                   <Link href="/register?role=teacher"><GraduationCap className="mr-2 size-5" /> I&apos;m a Teacher</Link>
                 </Button>
               </div>
@@ -160,7 +160,7 @@ export default function Home() {
                   { v: '3', l: 'Question types' },
                   { v: '∞', l: 'File size limit*' },
                 ].map((s) => (
-                  <div key={s.l} className="rounded-2xl border border-border/60 bg-white/60 px-2 py-4 backdrop-blur">
+                  <div key={s.l} className="rounded-2xl border border-border/60 bg-white px-2 py-4 shadow-sm">
                     <p className="font-headline text-2xl font-bold text-primary sm:text-3xl">{s.v}</p>
                     <p className="mt-1 text-[11px] font-medium text-muted-foreground sm:text-xs">{s.l}</p>
                   </div>
@@ -171,20 +171,20 @@ export default function Home() {
 
             {/* Floating preview cards */}
             <div className="relative mx-auto mt-14 hidden max-w-5xl lg:block">
-              <div className="glass animate-float-slow absolute -left-4 top-6 z-10 w-64 rounded-3xl p-5 shadow-xl">
+              <div className="animate-float-slow absolute -left-4 top-6 z-10 w-64 rounded-3xl border border-border/50 bg-white p-5 shadow-lift">
                 <div className="flex items-center gap-2 text-primary"><PenTool className="size-4" /><p className="text-xs font-bold uppercase tracking-wider">Quiz ready</p></div>
                 <p className="mt-2 text-sm font-semibold">Photosynthesis — 10 questions</p>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full w-4/5 rounded-full bg-gradient-to-r from-primary to-accent" /></div>
                 <p className="mt-2 text-xs text-muted-foreground">Score 8/10 · Explanations included</p>
               </div>
-              <div className="glass animate-float-slow absolute -right-4 top-16 z-10 w-64 rounded-3xl p-5 shadow-xl [animation-delay:1.8s]">
+              <div className="animate-float-slow absolute -right-4 top-16 z-10 w-64 rounded-3xl border border-border/50 bg-white p-5 shadow-lift [animation-delay:1.8s]">
                 <div className="flex items-center gap-2 text-accent"><FileText className="size-4" /><p className="text-xs font-bold uppercase tracking-wider">Notes generated</p></div>
                 <p className="mt-2 text-sm font-semibold">Chapter 4 — structured summary</p>
                 <div className="mt-3 space-y-1.5">
                   <div className="h-2 w-full rounded-full bg-muted" /><div className="h-2 w-5/6 rounded-full bg-muted" /><div className="h-2 w-4/6 rounded-full bg-muted" />
                 </div>
               </div>
-              <div className="glass mx-auto max-w-2xl rounded-3xl p-6 shadow-2xl sm:p-8">
+              <div className="mx-auto max-w-2xl rounded-3xl border border-border/50 bg-white p-6 shadow-lift sm:p-8">
                 <div className="flex items-center gap-3">
                   <span className="grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary"><ScanText className="size-5" /></span>
                   <div>
@@ -286,7 +286,7 @@ export default function Home() {
                 <Button size="lg" className="rounded-2xl px-8 shadow-xl shadow-primary/30" asChild>
                   <Link href="/register?role=student">Start learning free</Link>
                 </Button>
-                <Button size="lg" variant="outline" className="rounded-2xl bg-white/70 px-8 backdrop-blur" asChild>
+                <Button size="lg" variant="outline" className="rounded-2xl bg-white px-8" asChild>
                   <Link href="/register?role=teacher">Create an assessment</Link>
                 </Button>
               </div>

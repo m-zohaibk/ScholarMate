@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from "@/firebase/client-provider";
@@ -6,6 +6,13 @@ import { FirebaseClientProvider } from "@/firebase/client-provider";
 export const metadata: Metadata = {
   title: 'Smart Academic Assistant | AI-Powered Learning',
   description: 'AI-powered study notes, quizzes, and schedules for students and teachers.',
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#eef3f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#050a14' },
+  ],
 };
 
 export default function RootLayout({

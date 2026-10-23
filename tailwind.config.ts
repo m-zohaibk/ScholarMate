@@ -71,6 +71,14 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      boxShadow: {
+        /* Two-layer elevation: a tight contact shadow plus a soft ambient
+           one, tinted with the ink color so depth reads on the pale blue
+           app background without going gray or heavy. */
+        soft: '0 1px 2px rgb(15 23 41 / 0.05), 0 10px 30px -14px rgb(15 23 41 / 0.14)',
+        lift: '0 2px 4px rgb(15 23 41 / 0.05), 0 20px 44px -16px rgb(15 23 41 / 0.20)',
+        overlay: '0 4px 8px rgb(15 23 41 / 0.06), 0 16px 40px -12px rgb(15 23 41 / 0.18)',
+      },
       keyframes: {
         'accordion-down': {
           from: {

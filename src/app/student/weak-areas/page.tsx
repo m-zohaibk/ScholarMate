@@ -34,8 +34,8 @@ function titlesMatch(a: string, b: string) {
 
 const STATUS_STYLES: Record<TopicStat['status'], { chip: string; bar: string }> = {
   Weak: { chip: 'bg-red-500/10 text-red-600', bar: '[&>div]:bg-red-500' },
-  Improving: { chip: 'bg-amber-500/10 text-amber-600', bar: '[&>div]:bg-amber-500' },
-  Strong: { chip: 'bg-emerald-500/10 text-emerald-600', bar: '[&>div]:bg-emerald-500' },
+  Improving: { chip: 'bg-amber-500/10 text-amber-700', bar: '[&>div]:bg-amber-500' },
+  Strong: { chip: 'bg-emerald-500/10 text-emerald-700', bar: '[&>div]:bg-emerald-500' },
 };
 
 export default function WeakAreasPage() {

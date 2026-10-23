@@ -106,12 +106,12 @@ function RegisterForm() {
 
           {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
 
-          <Button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-r from-[#257edc] to-[#5e4ce6] text-base font-semibold shadow-lg shadow-[#5e4ce6]/25 transition-opacity hover:opacity-95" disabled={busy}>
+          <Button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-r from-[#216ec0] to-[#5e4ce6] text-base font-semibold shadow-lg shadow-[#5e4ce6]/25 transition-opacity hover:opacity-95" disabled={busy}>
             {busy ? <><Loader2 className="mr-2 size-5 animate-spin" /> Creating account...</> : `Create ${role} account`}
           </Button>
         </form>
 
-        <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
           <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
         </div>
 

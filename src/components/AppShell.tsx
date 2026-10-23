@@ -77,8 +77,9 @@ function NavItems({ role, onNavigate }: { role: 'teacher' | 'student'; onNavigat
             key={item.href}
             href={item.href}
             onClick={onNavigate}
+            aria-current={active ? 'page' : undefined}
             className={cn(
-              'group flex items-center gap-3 rounded-2xl px-4 py-3 transition-all duration-200',
+              'group flex items-center gap-3 rounded-2xl px-4 py-3 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#12255a]',
               active
                 ? 'bg-white text-primary shadow-lg shadow-black/20'
                 : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -89,7 +90,7 @@ function NavItems({ role, onNavigate }: { role: 'teacher' | 'student'; onNavigat
               <span className={cn('block truncate text-sm font-semibold', active ? 'text-slate-900' : 'text-white')}>
                 {item.label}
               </span>
-              <span className={cn('block truncate text-[11px]', active ? 'text-slate-500' : 'text-white/50')}>
+              <span className={cn('block truncate text-[11px]', active ? 'text-slate-500' : 'text-white/60')}>
                 {item.blurb}
               </span>
             </span>
@@ -133,7 +134,7 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
           <span className="block text-[13px] font-semibold text-white">
             {role === 'teacher' ? 'Teacher' : 'Student'} Workspace
           </span>
-          <span className="block text-[11px] text-white/55">Powered by AI</span>
+          <span className="block text-[11px] text-white/65">Powered by AI</span>
         </span>
       </div>
       <NavItems role={role} onNavigate={onNavigate} />
@@ -144,20 +145,20 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
           </span>
           <span className="min-w-0 leading-tight">
             <span className="block truncate text-sm font-semibold text-white">{profile?.name || 'My account'}</span>
-            <span className="block truncate text-[11px] text-white/55">{user?.email || ''}</span>
+            <span className="block truncate text-[11px] text-white/65">{user?.email || ''}</span>
           </span>
         </div>
         <Link
           href="/"
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#12255a]"
         >
           <Home className="size-5 shrink-0 text-white/60" /> Home
         </Link>
         <button
           type="button"
           onClick={() => void handleSignOut()}
-          className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#12255a]"
         >
           <LogOut className="size-5 shrink-0 text-white/60" /> Sign out
         </button>
@@ -172,12 +173,12 @@ export function AppShell({ role, children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 shadow-[24px_0_48px_-28px_rgb(8_18_40/0.45)] lg:block">
         <SidebarBody role={role} />
       </aside>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl lg:hidden">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl lg:hidden">
         <div className="flex h-16 items-center gap-3 px-4">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>

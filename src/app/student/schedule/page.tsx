@@ -298,11 +298,11 @@ export default function StudySchedulePlanner() {
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="rounded-2xl bg-primary/5 p-3.5 text-center">
                   <p className="font-headline text-2xl font-bold text-primary">{completed.length}</p>
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Completed</p>
+                  <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Completed</p>
                 </div>
                 <div className="rounded-2xl bg-accent/5 p-3.5 text-center">
                   <p className="font-headline text-2xl font-bold text-accent">{dayTasks.length - completed.length}</p>
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Remaining</p>
+                  <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Remaining</p>
                 </div>
               </div>
             </CardContent>

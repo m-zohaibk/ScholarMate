@@ -90,7 +90,7 @@ export default function StudentDashboard() {
             <p className="mt-1.5 text-muted-foreground">Ready to tackle your study sessions today?</p>
           </div>
           <div className="flex flex-col gap-2.5 sm:flex-row md:flex-col lg:flex-row">
-            <Button variant="outline" className="rounded-2xl bg-white/70 backdrop-blur" asChild>
+            <Button variant="outline" className="rounded-2xl bg-white" asChild>
               <Link href="/student/schedule"><Calendar className="mr-2 size-4" /> View Calendar</Link>
             </Button>
             <Button className="rounded-2xl shadow-lg shadow-accent/25" asChild>
@@ -138,7 +138,7 @@ export default function StudentDashboard() {
                   <Link
                     href={activity.href}
                     key={activity.id}
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-white/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-4"
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-white/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
                   >
                     <div className="flex min-w-0 items-center gap-3.5">
                       <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
@@ -158,6 +158,9 @@ export default function StudentDashboard() {
                 <span className="mx-auto mb-4 grid size-16 place-items-center rounded-3xl bg-muted"><BookOpen className="size-7" /></span>
                 <p className="font-medium text-foreground">No study activity yet.</p>
                 <p className="mt-1 text-sm">Generate notes or complete a quiz to see it here.</p>
+                <Button className="mt-5 rounded-2xl" asChild>
+                  <Link href="/student/notes"><Sparkles className="mr-2 size-4" /> Create your first notes</Link>
+                </Button>
               </div>
             )}
           </CardContent>
@@ -192,7 +195,7 @@ export default function StudentDashboard() {
               </Button>
             </div>
             <div className="space-y-3 rounded-2xl border border-red-500/15 bg-red-500/[0.04] p-4">
-              <div className="flex items-center gap-2 text-red-500">
+              <div className="flex items-center gap-2 text-red-600">
                 <Target className="size-4" />
                 <span className="text-[13px] font-bold">Knowledge Gaps</span>
               </div>

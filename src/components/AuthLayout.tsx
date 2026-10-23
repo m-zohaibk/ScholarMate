@@ -13,7 +13,7 @@ const FEATURES = [
 export function BrandLockup({ dark = false, centered = false }: { dark?: boolean; centered?: boolean }) {
   return (
     <Link href="/" className={`flex items-center gap-3 ${centered ? 'justify-center' : ''}`}>
-      <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#257edc] via-[#3f6fe0] to-[#5e4ce6] text-white shadow-lg shadow-[#5e4ce6]/40 ring-1 ring-white/40">
+      <span className="relative grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#216ec0] via-[#3f6fe0] to-[#5e4ce6] text-white shadow-lg shadow-[#5e4ce6]/40 ring-1 ring-white/40">
         <GraduationCap className="size-6" />
         <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-white text-[#5e4ce6] shadow">
           <Sparkles className="size-2.5" />
@@ -23,7 +23,7 @@ export function BrandLockup({ dark = false, centered = false }: { dark?: boolean
         <span className={`block font-headline text-[22px] font-bold tracking-tight ${dark ? 'text-[#0d1b3e]' : 'text-white'}`}>
           Scholar<span className="bg-gradient-to-r from-[#6db3ff] to-[#b7a8ff] bg-clip-text text-transparent">Mate</span>
         </span>
-        <span className={`mt-1 block text-[10px] font-semibold uppercase tracking-[0.28em] ${dark ? 'text-slate-500' : 'text-white/60'}`}>
+        <span className={`mt-1 block text-[11px] font-semibold uppercase tracking-[0.24em] ${dark ? 'text-slate-600' : 'text-white/60'}`}>
           Smart Academic Assistant
         </span>
       </span>
@@ -90,7 +90,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="rounded-[26px] border border-[#dbe5f3] bg-white p-6 shadow-[0_24px_60px_-24px_rgba(13,27,62,0.28)] sm:p-8">
             {children}
           </div>
-          <p className="mt-5 text-center text-xs text-slate-500">
+          <p className="mt-5 text-center text-xs text-slate-600">
             Protected accounts · Your records stay private to you
           </p>
         </div>
