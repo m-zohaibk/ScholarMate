@@ -7,15 +7,49 @@ import { Calendar } from '@/components/ui/calendar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Clock, CheckCircle2, Circle, Sparkles, Bell, Plus, X } from 'lucide-react';
+import { Clock, CheckCircle2, Circle, Sparkles, Bell, Plus, X, RefreshCw, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { formatDateKey, formatDateLabel, getTasks, makeId, saveTasks, type StudyTask } from '@/lib/study-store';
+import { formatDateKey, formatDateLabel, getAttempts, getPlanSetup, getSources, getTasks, makeId, savePlanSetup, saveTasks, type QuizAttempt, type StudyPlanSetup, type StudyTask } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
-import { loadTasks, saveTaskToFirestore } from '@/lib/firestore-store';
+import { deleteTaskFromFirestore, loadAttempts, loadTasks, saveTaskToFirestore } from '@/lib/firestore-store';
+import { getTopicStats } from '@/lib/analytics';
+import { parseApiResponse } from '@/lib/api-response';
+import { StudyPlanDialog } from '@/components/StudyPlanDialog';
 import { cn } from '@/lib/utils';
 
 function durationMinutes(duration: string) {
   return Number(duration.match(/(\d+(?:\.\d+)?)h/)?.[1] || 0) * 60 + Number(duration.match(/(\d+)m/)?.[1] || 0);
+}
+
+function formatDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours && rest) return `${hours}h ${rest}m`;
+  if (hours) return `${hours}h`;
+  return `${rest}m`;
+}
+
+function titlesMatch(a: string, b: string) {
+  const left = a.trim().toLowerCase();
+  const right = b.trim().toLowerCase();
+  if (!left || !right) return false;
+  return left === right || (left.length >= 4 && right.includes(left)) || (right.length >= 4 && left.includes(right));
+}
+
+interface PlanSession {
+  date: string;
+  time: string;
+  durationMinutes: number;
+  title: string;
+  subject: string;
+  topic?: string;
+  type: 'Learn' | 'Practice' | 'Revision';
+}
+
+interface PlanResult {
+  planTitle: string;
+  summary: string;
+  sessions: PlanSession[];
 }
 
 export default function StudySchedulePlanner() {
@@ -23,12 +57,21 @@ export default function StudySchedulePlanner() {
   const { firestore, user, isUserLoading } = useFirebase();
   const [date, setDate] = useState<Date>(new Date());
   const [tasks, setTasks] = useState<StudyTask[]>([]);
+  const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: '', time: '15:00', duration: '1h', category: 'General' });
+  const [planSetup, setPlanSetupState] = useState<StudyPlanSetup | null>(null);
+  const [showPlanDialog, setShowPlanDialog] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
   useEffect(() => {
-    const refresh = () => setTasks(getTasks());
+    const refresh = () => {
+      setTasks(getTasks());
+      setAttempts(getAttempts());
+    };
     refresh();
+    setPlanSetupState(getPlanSetup());
     window.addEventListener('scholarmate:changed', refresh);
     return () => window.removeEventListener('scholarmate:changed', refresh);
   }, []);
@@ -41,6 +84,9 @@ export default function StudySchedulePlanner() {
         saveTasks(remoteTasks);
       }
     }).catch(() => undefined);
+    loadAttempts(firestore, user).then((remoteAttempts) => {
+      if (remoteAttempts.length) setAttempts(remoteAttempts);
+    }).catch(() => undefined);
   }, [firestore, isUserLoading, user]);
 
   const selectedKey = formatDateKey(date);
@@ -48,6 +94,19 @@ export default function StudySchedulePlanner() {
   const completed = dayTasks.filter((task) => task.completed);
   const focusMinutes = completed.reduce((sum, task) => sum + durationMinutes(task.duration), 0);
   const goalMinutes = Math.max(60, dayTasks.reduce((sum, task) => sum + durationMinutes(task.duration), 0));
+
+  const topicSuggestions = useMemo(() => {
+    const fromStats = getTopicStats(attempts)
+      .filter((stat) => stat.status !== 'Strong')
+      .map((stat) => stat.topic);
+    const fromSources = getSources().flatMap((source) => source.topics.map((topic) => topic.title));
+    return Array.from(new Map([...fromStats, ...fromSources].map((title) => [title.toLowerCase(), title])).values());
+  }, [attempts]);
+
+  const upcomingPlanTasks = useMemo(() => {
+    const todayKey = formatDateKey(new Date());
+    return tasks.filter((task) => task.planId && task.date >= todayKey);
+  }, [tasks]);
 
   const toggleTask = (id: string) => {
     const next = tasks.map((task) => task.id === id ? { ...task, completed: !task.completed } : task);
@@ -70,11 +129,103 @@ export default function StudySchedulePlanner() {
     toast({ title: 'Task added', description: `Added to ${formatDateLabel(date)}.` });
   };
 
-  const optimize = () => {
-    const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-    setTasks(sorted);
-    saveTasks(sorted);
-    toast({ title: 'Schedule optimized', description: 'Tasks are now ordered by date and start time.' });
+  const buildPlan = async (setup: StudyPlanSetup, mode: 'build' | 'rebalance') => {
+    setGeneratingPlan(true);
+    try {
+      const todayKey = formatDateKey(new Date());
+      const stats = getTopicStats(attempts);
+      const subjects = setup.subjects.map((subject) => ({
+        name: subject.name,
+        examDate: subject.examDate,
+        topics: subject.topics.map((title) => {
+          const stat = stats.find((item) => titlesMatch(item.topic, title) || titlesMatch(item.topic, subject.name));
+          return { title, strengthPct: stat?.avgPct, status: stat?.status };
+        }),
+      }));
+      const busyMinutesByDate: Record<string, number> = {};
+      for (const task of tasks) {
+        if (!task.planId && !task.completed) {
+          busyMinutesByDate[task.date] = (busyMinutesByDate[task.date] || 0) + durationMinutes(task.duration);
+        }
+      }
+
+      const response = await fetch('/api/student/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: todayKey,
+          hoursPerDay: setup.hoursPerDay,
+          dayStartTime: setup.dayStartTime,
+          subjects,
+          busyMinutesByDate,
+          note: mode === 'rebalance' ? 'This is a rebalance of an existing plan using the student\'s latest quiz scores. Rebuild the remaining days only.' : undefined,
+        }),
+      });
+      const result = await parseApiResponse<PlanResult>(response);
+
+      // Enforce the plan rules locally as well: valid dates, before the exam,
+      // and never beyond the student's daily hours (plus their fixed tasks).
+      const planId = makeId('plan');
+      const usedByDate = new Map<string, number>();
+      const newTasks: StudyTask[] = [];
+      const sortedSessions = [...result.sessions].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+      for (const session of sortedSessions) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(session.date) || session.date < todayKey) continue;
+        const subject = setup.subjects.find((item) => titlesMatch(item.name, session.subject));
+        if (subject && session.date > subject.examDate) continue;
+        const used = (busyMinutesByDate[session.date] || 0) + (usedByDate.get(session.date) || 0);
+        if (used + session.durationMinutes > setup.hoursPerDay * 60 + 15) continue;
+        usedByDate.set(session.date, (usedByDate.get(session.date) || 0) + session.durationMinutes);
+        newTasks.push({
+          id: makeId('task'),
+          date: session.date,
+          time: session.time,
+          title: session.title,
+          duration: formatDuration(session.durationMinutes),
+          category: session.type,
+          completed: false,
+          planId,
+        });
+      }
+      if (!newTasks.length) throw new Error('The plan came back empty. Try widening the dates or adding topics.');
+
+      const replaced = tasks.filter((task) => task.planId && task.date >= todayKey);
+      const kept = tasks.filter((task) => !(task.planId && task.date >= todayKey));
+      const next = [...kept, ...newTasks].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+      setTasks(next);
+      saveTasks(next);
+      for (const task of replaced) void deleteTaskFromFirestore(firestore, user, task.id).catch(() => undefined);
+      for (const task of newTasks) void saveTaskToFirestore(firestore, user, task).catch(() => undefined);
+
+      const savedSetup: StudyPlanSetup = { ...setup, planTitle: result.planTitle, planSummary: result.summary, generatedAt: new Date().toISOString() };
+      savePlanSetup(savedSetup);
+      setPlanSetupState(savedSetup);
+      setBannerDismissed(false);
+      setShowPlanDialog(false);
+      toast({
+        title: mode === 'rebalance' ? 'Plan rebalanced' : 'Study plan created',
+        description: `${newTasks.length} sessions scheduled. Weak topics were prioritized automatically.`,
+      });
+    } catch (error) {
+      toast({ title: 'Plan failed', description: error instanceof Error ? error.message : 'The study plan could not be generated.', variant: 'destructive' });
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const removePlanSessions = () => {
+    const todayKey = formatDateKey(new Date());
+    const removed = tasks.filter((task) => task.planId && task.date >= todayKey);
+    const next = tasks.filter((task) => !(task.planId && task.date >= todayKey));
+    setTasks(next);
+    saveTasks(next);
+    for (const task of removed) void deleteTaskFromFirestore(firestore, user, task.id).catch(() => undefined);
+    if (planSetup) {
+      const cleared = { ...planSetup, planTitle: undefined, planSummary: undefined, generatedAt: undefined };
+      savePlanSetup(cleared);
+      setPlanSetupState(cleared);
+    }
+    toast({ title: 'Plan sessions removed', description: 'Your manual tasks and completed sessions were kept.' });
   };
 
   return (
@@ -87,10 +238,50 @@ export default function StudySchedulePlanner() {
           <h1 className="mt-2.5 font-headline text-3xl font-bold tracking-tight sm:text-4xl">Study Planner</h1>
           <p className="mt-1.5 text-muted-foreground">Plan, track, and improve your learning sessions.</p>
         </div>
-        <Button className="w-full rounded-2xl shadow-lg shadow-accent/25 sm:w-auto" onClick={optimize}>
-          <Sparkles className="mr-2 size-4" /> AI Optimize Schedule
-        </Button>
+        <div className="flex flex-col gap-2.5 sm:flex-row">
+          {planSetup?.planTitle && (
+            <Button variant="outline" className="rounded-2xl bg-white/70" disabled={generatingPlan} onClick={() => void buildPlan(planSetup, 'rebalance')}>
+              {generatingPlan ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />} Rebalance plan
+            </Button>
+          )}
+          <Button className="rounded-2xl shadow-lg shadow-accent/25" onClick={() => setShowPlanDialog(true)}>
+            <Sparkles className="mr-2 size-4" /> Build my study plan
+          </Button>
+        </div>
       </div>
+
+      {planSetup?.planTitle && !bannerDismissed && (
+        <Card className="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/[0.07] to-accent/[0.07]">
+          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 font-headline text-lg font-bold">
+                <Sparkles className="size-5 shrink-0 text-primary" /> {planSetup.planTitle}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{planSetup.planSummary}</p>
+              <p className="mt-1.5 text-xs font-medium text-muted-foreground">
+                {upcomingPlanTasks.length} planned session{upcomingPlanTasks.length === 1 ? '' : 's'} ahead · built {planSetup.generatedAt ? new Date(planSetup.generatedAt).toLocaleDateString() : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl bg-white/70" onClick={removePlanSessions}>
+                <Trash2 className="mr-1.5 size-3.5" /> Remove sessions
+              </Button>
+              <Button variant="ghost" size="icon" className="size-9 rounded-xl" aria-label="Dismiss plan summary" onClick={() => setBannerDismissed(true)}>
+                <X className="size-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <StudyPlanDialog
+        open={showPlanDialog}
+        onOpenChange={setShowPlanDialog}
+        initial={planSetup}
+        topicSuggestions={topicSuggestions}
+        generating={generatingPlan}
+        onGenerate={(setup) => void buildPlan(setup, 'build')}
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
         <div className="space-y-5 lg:col-span-4">
@@ -140,7 +331,10 @@ export default function StudySchedulePlanner() {
                   <div className="w-14 shrink-0 pt-0.5 text-sm font-bold text-muted-foreground">{task.time}</div>
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center justify-between gap-2.5">
-                      <h4 className={cn('truncate text-[15px] font-bold sm:text-base', task.completed && 'text-muted-foreground line-through')}>{task.title}</h4>
+                      <h4 className={cn('flex min-w-0 items-center gap-1.5 truncate text-[15px] font-bold sm:text-base', task.completed && 'text-muted-foreground line-through')}>
+                        {task.planId && <Sparkles className="size-3.5 shrink-0 text-primary" />}
+                        <span className="truncate">{task.title}</span>
+                      </h4>
                       <Badge variant="secondary" className="shrink-0 rounded-full font-medium">{task.category}</Badge>
                     </div>
                     <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">

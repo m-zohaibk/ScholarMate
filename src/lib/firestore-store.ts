@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, query, setDoc, where, type Firestore } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, query, setDoc, where, type Firestore } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import type { QuizAttempt, StoredNote, StoredQuiz, StoredSource, StudyTask } from './study-store';
 
@@ -33,6 +33,12 @@ export async function loadTasks(firestore: Firestore, user: User | null) {
 
 export async function saveTaskToFirestore(firestore: Firestore, user: User | null, task: StudyTask) {
   return writeUserDocument(firestore, user, 'studySchedules', task.id, task, 'studentId');
+}
+
+export async function deleteTaskFromFirestore(firestore: Firestore, user: User | null, taskId: string) {
+  const uid = requireUser(user);
+  if (!uid) return;
+  await deleteDoc(doc(firestore, 'userProfiles', uid, 'studySchedules', taskId));
 }
 
 export async function loadPersonalQuizzes(firestore: Firestore, user: User | null) {

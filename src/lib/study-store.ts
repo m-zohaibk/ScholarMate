@@ -73,7 +73,37 @@ export type StudyTask = {
   duration: string;
   category: string;
   completed: boolean;
+  /** Set when the task was created by the AI study planner (enables clean rebalancing). */
+  planId?: string;
 };
+
+/** The student's planner setup: subjects, exam dates, and daily availability. */
+export type StudyPlanSetup = {
+  subjects: Array<{ name: string; examDate: string; topics: string[] }>;
+  hoursPerDay: number;
+  dayStartTime: string;
+  planTitle?: string;
+  planSummary?: string;
+  generatedAt?: string;
+};
+
+const PLAN_SETUP_KEY = 'scholarmate.planSetup';
+
+export function getPlanSetup(): StudyPlanSetup | null {
+  if (!canUseStorage()) return null;
+  try {
+    const value = window.localStorage.getItem(PLAN_SETUP_KEY);
+    return value ? (JSON.parse(value) as StudyPlanSetup) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePlanSetup(setup: StudyPlanSetup | null) {
+  if (!canUseStorage()) return;
+  if (setup) window.localStorage.setItem(PLAN_SETUP_KEY, JSON.stringify(setup));
+  else window.localStorage.removeItem(PLAN_SETUP_KEY);
+}
 
 const KEYS = {
   notes: 'scholarmate.notes',
