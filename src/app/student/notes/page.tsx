@@ -18,7 +18,12 @@ import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
 import { CHUNK_CHAR_LIMIT, chunksForText, type StudyChunk } from '@/lib/source-inspect';
 
 function notesAsText(notes: StudentStructuredNotesOutput) {
-  return [notes.title, '', notes.summary, '', ...notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])])].join('\n');
+  const sectionLines = notes.sections.flatMap((section) => [section.heading, ...section.subsections.flatMap((subsection) => [subsection.subheading, ...subsection.points.map((point) => `• ${point}`)])]);
+  // Detailed notes read best with the summary as the closing wrap-up, not the opener.
+  if ((notes as StoredNote).detailLevel === 'detailed') {
+    return [notes.title, '', ...sectionLines, '', 'Summary', notes.summary].join('\n');
+  }
+  return [notes.title, '', notes.summary, '', ...sectionLines].join('\n');
 }
 
 type NoteSection = StudentStructuredNotesOutput['sections'][number];
@@ -47,11 +52,14 @@ type GenerationPart = {
 };
 
 /**
- * How many parts generate at the same time. Parts are fully independent
- * calls, so running them side by side cuts a big document's wait from the
- * sum of every part down to roughly the slowest handful.
+ * How many parts generate at the same time. The app runs on a free API
+ * plan with a low requests-per-minute allowance, so the pace is kept
+ * deliberately gentle: a few parts side by side, with call starts spaced
+ * out (MIN_CALL_INTERVAL_MS) so a burst never trips the plan's limit and
+ * turns into failed parts.
  */
-const PART_CONCURRENCY = 10;
+const PART_CONCURRENCY = 3;
+const MIN_CALL_INTERVAL_MS = 4000;
 
 /** Small neighbouring parts merge into one call, to cut the call count. */
 const MAX_PARTS_PER_CALL = 3;
@@ -87,24 +95,67 @@ function groupChunksForGeneration(chunks: StudyChunk[]): GenerationPart[] {
   }));
 }
 
+/**
+ * One note point, typeset for reading: **bold** spans the model emits are
+ * honoured, and a plain "Term: explanation" lead-in gets its term bolded,
+ * so definitions scan the way a textbook's do.
+ */
+function PointText({ text }: { text: string }) {
+  const segments = text.split(/\*\*(.+?)\*\*/g);
+  const hasMarkdownBold = segments.length > 1;
+  return (
+    <span>
+      {segments.map((segment, index) => {
+        if (index % 2 === 1) {
+          return <strong key={index} className="font-semibold text-slate-800">{segment}</strong>;
+        }
+        if (index === 0 && !hasMarkdownBold) {
+          const lead = segment.match(/^([^:.;]{2,60}):\s+([\s\S]*)$/);
+          if (lead) {
+            return (
+              <span key={index}>
+                <strong className="font-semibold text-slate-800">{lead[1]}:</strong> {lead[2]}
+              </span>
+            );
+          }
+        }
+        return <span key={index}>{segment}</span>;
+      })}
+    </span>
+  );
+}
+
 /** Read-only rendering of note sections — shared by the finished note and the live preview. */
 function NoteSections({ sections }: { sections: NoteSection[] }) {
   return (
-    <>
-      {sections.map((section) => (
-        <div key={section.heading} className="space-y-3.5">
-          <h3 className="flex items-center gap-2.5 font-headline text-xl font-bold tracking-tight">
-            <span className="h-6 w-1.5 rounded-full bg-gradient-to-b from-primary to-accent" />{section.heading}
+    <div className="space-y-9">
+      {sections.map((section, sectionIndex) => (
+        <section key={section.heading} className="animate-in fade-in slide-in-from-bottom-2 space-y-4 duration-500">
+          <h3 className="flex items-center gap-3 font-headline text-[22px] font-bold leading-snug tracking-tight text-slate-900">
+            <span className="h-7 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-primary to-accent" />
+            <span className="font-headline text-sm font-bold tracking-widest text-primary/50">{String(sectionIndex + 1).padStart(2, '0')}</span>
+            {section.heading}
           </h3>
-          <div className="grid gap-3.5">
-            {section.subsections.map((subsection) => (
-              <Card key={subsection.subheading} className="border-border/60 bg-white/70">
-                <CardHeader className="pb-2.5 pt-4"><CardTitle className="text-[15px] font-semibold text-accent">{subsection.subheading}</CardTitle></CardHeader>
-                <CardContent className="pt-0">
-                  <ul className="space-y-2.5">
-                    {subsection.points.map((point) => (
-                      <li key={point} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
-                        <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" /><span>{point}</span>
+          <div className="grid gap-4">
+            {section.subsections.map((subsection, subsectionIndex) => (
+              <Card
+                key={subsection.subheading}
+                className="animate-in fade-in slide-in-from-bottom-1 border-border/60 bg-white/80 duration-500"
+                style={{ animationDelay: `${Math.min(subsectionIndex * 90, 450)}ms` }}
+              >
+                <CardHeader className="px-5 pb-2.5 pt-5 sm:px-6">
+                  <CardTitle className="text-base font-bold tracking-tight text-accent">{subsection.subheading}</CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-5 pt-0 sm:px-6">
+                  <ul className="space-y-3">
+                    {subsection.points.map((point, pointIndex) => (
+                      <li
+                        key={point}
+                        className="animate-in fade-in flex gap-3 text-[15px] leading-7 text-slate-600 duration-500"
+                        style={{ animationDelay: `${Math.min(pointIndex * 60, 360)}ms` }}
+                      >
+                        <span className="mt-[10px] size-2 shrink-0 rounded-full bg-gradient-to-br from-primary to-accent" />
+                        <PointText text={point} />
                       </li>
                     ))}
                   </ul>
@@ -112,9 +163,9 @@ function NoteSections({ sections }: { sections: NoteSection[] }) {
               </Card>
             ))}
           </div>
-        </div>
+        </section>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -126,6 +177,8 @@ export default function StudentNotesGenerator() {
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   /** Notes assembled so far during a detailed generation — shown live as parts finish. */
   const [streamed, setStreamed] = useState<{ title: string; summary: string; sections: NoteSection[] } | null>(null);
+  /** How many streamed sections are currently revealed — the preview paces its own reveal. */
+  const [revealed, setRevealed] = useState(0);
   const [selection, setSelection] = useState<SourceSelection | null>(null);
   const [seedMaterial, setSeedMaterial] = useState<{ label: string; text: string } | null>(null);
   const [pickerSeed, setPickerSeed] = useState<{ sourceId: string; topicTitle?: string } | null>(null);
@@ -164,6 +217,18 @@ export default function StudentNotesGenerator() {
       toast({ title: 'Material ready', description: seed.label });
     }
   }, [toast]);
+
+  // Paced reveal: while parts generate, the finished sections appear one
+  // at a time at a calm rhythm instead of dumping onto the screen in bursts.
+  useEffect(() => {
+    if (!streamed) {
+      setRevealed(0);
+      return;
+    }
+    if (revealed >= streamed.sections.length) return;
+    const timer = setTimeout(() => setRevealed((count) => count + 1), revealed === 0 ? 300 : 1100);
+    return () => clearTimeout(timer);
+  }, [streamed, revealed]);
 
   // Warm the generation function while the student picks material, so the
   // first Generate click never pays the cold-start cost.
@@ -222,15 +287,31 @@ export default function StudentNotesGenerator() {
       });
     };
 
+    // Shared start gate: across the whole pool (retries included),
+    // successive calls begin at least MIN_CALL_INTERVAL_MS apart, so the
+    // free plan's per-minute allowance is never burst through.
+    let nextSlotAt = 0;
+    const waitForSlot = async () => {
+      const now = Date.now();
+      const wait = Math.max(0, nextSlotAt - now);
+      nextSlotAt = Math.max(now, nextSlotAt) + MIN_CALL_INTERVAL_MS;
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    };
+
     const runPart = async (index: number) => {
       const part = parts[index];
       running.set(index, part.label);
       publishProgress();
       try {
+        await waitForSlot();
         outputs[index] = await requestPartNotes(part);
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+      } catch (error) {
+        // A rate-limit refusal gets a long, patient pause; any other
+        // transient failure retries after a short one.
+        const rateLimited = /rate limit|429/i.test(error instanceof Error ? error.message : '');
+        await new Promise((resolve) => setTimeout(resolve, rateLimited ? 15000 : 2500));
         try {
+          await waitForSlot();
           outputs[index] = await requestPartNotes(part);
         } catch {
           failed.push(part.label);
@@ -373,6 +454,17 @@ export default function StudentNotesGenerator() {
 
   const canGenerate = Boolean(seedMaterial || selection?.hasMaterial);
 
+  // Detailed notes end with their summary (a closing wrap-up); summary-mode
+  // notes keep it up top, where it is the main content.
+  const summaryCard = notes ? (
+    <Card className="overflow-hidden border-primary/15">
+      <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 py-3.5">
+        <div className="flex items-center gap-2 text-primary"><Highlighter className="size-4" /><span className="text-xs font-bold uppercase tracking-wider">Executive Summary</span></div>
+      </CardHeader>
+      <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{notes.summary}</CardContent>
+    </Card>
+  ) : null;
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
       <div>
@@ -418,7 +510,7 @@ export default function StudentNotesGenerator() {
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {detailLevel === 'summary'
                     ? 'One fast pass over the selected material — the main points only.'
-                    : 'Complete notes in easy wording. Parts generate in parallel so almost nothing is missed — even big documents finish far faster than before.'}
+                    : 'Complete notes in easy wording, with the summary at the end. Parts generate steadily in parallel — paced to stay within free API limits — so almost nothing is missed.'}
                 </p>
               </div>
               <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || !canGenerate} onClick={() => void handleGenerate()}>
@@ -428,7 +520,7 @@ export default function StudentNotesGenerator() {
                 <GenerationProgress
                   title={progress && progress.total > 1 ? `Generating your notes — ${progress.done} of ${progress.total} parts complete` : 'Generating your notes'}
                   hint={progress && progress.total > 1
-                    ? `${progress.done} of ${progress.total} parts complete${progress.label ? ` — now: ${progress.label}` : ''}. Parts generate in parallel and appear below as they finish — finished parts are always kept.`
+                    ? `${progress.done} of ${progress.total} parts complete${progress.label ? ` — now: ${progress.label}` : ''}. Parts generate steadily — paced to stay within the free API limit — and appear below as they finish. Finished parts are always kept.`
                     : 'Reading your material and writing structured notes. The first generation after a while can take up to a minute.'}
                 />
               )}
@@ -464,6 +556,7 @@ export default function StudentNotesGenerator() {
                 <h2 className="truncate font-headline text-2xl font-bold tracking-tight text-primary">{streamed.title}</h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">Still generating — this preview fills in part by part, in document order.</p>
               </div>
+              <NoteSections sections={streamed.sections.slice(0, revealed)} />
               {streamed.summary ? (
                 <Card className="overflow-hidden border-primary/15">
                   <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 py-3.5">
@@ -472,7 +565,6 @@ export default function StudentNotesGenerator() {
                   <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{streamed.summary}</CardContent>
                 </Card>
               ) : null}
-              <NoteSections sections={streamed.sections} />
             </div>
           ) : !notes ? (
             <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-white/40 p-8 text-center sm:min-h-[500px]">
@@ -495,13 +587,9 @@ export default function StudentNotesGenerator() {
                   <Button variant="outline" size="icon" className="rounded-2xl" onClick={downloadNotes} aria-label="Download notes"><Download className="size-4" /></Button>
                 </div>
               </div>
-              <Card className="overflow-hidden border-primary/15">
-                <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 py-3.5">
-                  <div className="flex items-center gap-2 text-primary"><Highlighter className="size-4" /><span className="text-xs font-bold uppercase tracking-wider">Executive Summary</span></div>
-                </CardHeader>
-                <CardContent className="pt-4 text-sm leading-relaxed text-muted-foreground">{notes.summary}</CardContent>
-              </Card>
+              {notes.detailLevel !== 'detailed' && summaryCard}
               <NoteSections sections={notes.sections} />
+              {notes.detailLevel === 'detailed' && summaryCard}
             </div>
           )}
         </div>
