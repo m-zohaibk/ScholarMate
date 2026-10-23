@@ -87,22 +87,49 @@ export type StudyPlanSetup = {
   generatedAt?: string;
 };
 
+/**
+ * Per-account data separation.
+ *
+ * Every record this module stores (notes, quizzes, attempts, tasks, sources
+ * and the planner setup) belongs to exactly one signed-in account. The
+ * Firebase provider calls setActiveAccount() whenever the signed-in user
+ * changes; storage keys are then suffixed with that account's uid, so one
+ * student never sees another student's data on a shared device. While
+ * nobody is signed in, reads return empty results and writes are dropped.
+ */
+let activeUid: string | null = null;
+let accountSeen = false;
+
+export function setActiveAccount(uid: string | null) {
+  const changed = !accountSeen || uid !== activeUid;
+  accountSeen = true;
+  activeUid = uid;
+  if (!changed || typeof window === 'undefined') return;
+  // A one-shot page handoff belongs to whoever was signed in when it was set.
+  try {
+    window.sessionStorage.removeItem(SEED_KEY);
+  } catch {
+    // Session storage unavailable — nothing to clear.
+  }
+  if (uid) claimLegacyData(uid);
+}
+
+function scopedKey(base: string): string | null {
+  return activeUid ? `${base}:${activeUid}` : null;
+}
+
 const PLAN_SETUP_KEY = 'scholarmate.planSetup';
 
 export function getPlanSetup(): StudyPlanSetup | null {
-  if (!canUseStorage()) return null;
-  try {
-    const value = window.localStorage.getItem(PLAN_SETUP_KEY);
-    return value ? (JSON.parse(value) as StudyPlanSetup) : null;
-  } catch {
-    return null;
-  }
+  return read<StudyPlanSetup | null>(PLAN_SETUP_KEY, null);
 }
 
 export function savePlanSetup(setup: StudyPlanSetup | null) {
   if (!canUseStorage()) return;
-  if (setup) window.localStorage.setItem(PLAN_SETUP_KEY, JSON.stringify(setup));
-  else window.localStorage.removeItem(PLAN_SETUP_KEY);
+  const key = scopedKey(PLAN_SETUP_KEY);
+  if (!key) return;
+  if (setup) window.localStorage.setItem(key, JSON.stringify(setup));
+  else window.localStorage.removeItem(key);
 }
 
 const KEYS = {
@@ -117,8 +144,32 @@ function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
-function read<T>(key: string, fallback: T): T {
+/**
+ * One-time upgrade for data saved before accounts existed: the first
+ * account to sign in on a device adopts the old unscoped records as its
+ * own, and the shared copies are removed so no later account can see them.
+ */
+function claimLegacyData(uid: string) {
+  if (!canUseStorage()) return;
+  for (const base of [...Object.values(KEYS), PLAN_SETUP_KEY]) {
+    try {
+      const legacy = window.localStorage.getItem(base);
+      if (legacy === null) continue;
+      const scoped = `${base}:${uid}`;
+      if (window.localStorage.getItem(scoped) === null) {
+        window.localStorage.setItem(scoped, legacy);
+      }
+      window.localStorage.removeItem(base);
+    } catch {
+      // Best effort — a failed claim must never block sign-in.
+    }
+  }
+}
+
+function read<T>(base: string, fallback: T): T {
   if (!canUseStorage()) return fallback;
+  const key = scopedKey(base);
+  if (!key) return fallback;
   try {
     const value = window.localStorage.getItem(key);
     return value ? (JSON.parse(value) as T) : fallback;
@@ -127,10 +178,12 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
-function write<T>(key: string, value: T) {
+function write<T>(base: string, value: T) {
   if (!canUseStorage()) return;
+  const key = scopedKey(base);
+  if (!key) return;
   window.localStorage.setItem(key, JSON.stringify(value));
-  window.dispatchEvent(new CustomEvent('scholarmate:changed', { detail: key }));
+  window.dispatchEvent(new CustomEvent('scholarmate:changed', { detail: base }));
 }
 
 export function makeId(prefix: string) {
@@ -184,16 +237,9 @@ function dateKey(date: Date) {
 }
 
 export function getTasks() {
-  const tasks = read<StudyTask[] | null>(KEYS.tasks, null);
-  if (tasks) return tasks;
-  const today = dateKey(new Date());
-  const initial: StudyTask[] = [
-    { id: makeId('task'), date: today, time: '09:00', title: 'Calculus Review', duration: '1h 30m', completed: true, category: 'Math' },
-    { id: makeId('task'), date: today, time: '11:00', title: 'Biology Quiz Session', duration: '45m', completed: false, category: 'Science' },
-    { id: makeId('task'), date: today, time: '14:00', title: 'Literature Notes Prep', duration: '2h', completed: false, category: 'Arts' },
-  ];
-  write(KEYS.tasks, initial);
-  return initial;
+  // A new account starts with an empty schedule — no sample tasks, so no
+  // one inherits a streak or study time they never earned.
+  return read<StudyTask[]>(KEYS.tasks, []);
 }
 
 export function saveTasks(tasks: StudyTask[]) {

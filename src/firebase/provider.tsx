@@ -5,6 +5,7 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
+import { setActiveAccount } from '@/lib/study-store';
 
 interface FirebaseProviderProps {
   children: ReactNode;
@@ -70,6 +71,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
     if (!auth) { // If no Auth service instance, cannot determine user state
+      setActiveAccount(null);
       setUserAuthState({ user: null, isUserLoading: false, userError: new Error("Auth service not provided.") });
       return;
     }
@@ -79,10 +81,14 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     const unsubscribe = onAuthStateChanged(
       auth,
       (firebaseUser) => { // Auth state determined
+        // Scope every local study record to this account (or to nobody,
+        // when signed out) before any page reads the store.
+        setActiveAccount(firebaseUser?.uid ?? null);
         setUserAuthState({ user: firebaseUser, isUserLoading: false, userError: null });
       },
       (error) => { // Auth listener error
         console.error("FirebaseProvider: onAuthStateChanged error:", error);
+        setActiveAccount(null);
         setUserAuthState({ user: null, isUserLoading: false, userError: error });
       }
     );
