@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { GeminiFileUploadError, uploadGeminiPdfFromBlob } from '@/lib/gemini-files';
 
 export const runtime = 'nodejs';
+/** Ingestion polls the document service until the file is ready — give it the full window. */
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {

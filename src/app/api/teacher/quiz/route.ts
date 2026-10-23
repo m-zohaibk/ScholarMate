@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { generateTeacherQuiz } from '@/ai/flows/teacher-quiz-generation';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
+export const maxDuration = 60;
+
 function isGeminiPdfUri(value: unknown): value is string {
   return typeof value === 'string' && /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-z0-9-]+$/i.test(value);
 }

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { explainSimply } from '@/ai/flows/explain-simply';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const configurationError = getGoogleAiConfigurationError();
   if (configurationError) return NextResponse.json({ error: configurationError }, { status: 503 });

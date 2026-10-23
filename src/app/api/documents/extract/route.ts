@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { DocumentInputError, normalizeDocument } from '@/lib/document-extractor';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const input = await request.json();

@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { getAttempts, getQuizzes, makeId, saveAttempt, saveQuiz, takeStudySeed, type QuizAttempt, type StoredQuiz } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadAttempts, loadPublishedQuizzes, saveAttemptStatToFirestore, saveAttemptToFirestore, saveQuizToFirestore } from '@/lib/firestore-store';
-import { parseApiResponse } from '@/lib/api-response';
+import { fetchJsonWithRetry, parseApiResponse } from '@/lib/api-response';
+import { GenerationProgress } from '@/components/GenerationProgress';
 import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
 import { buildFeedbackSummary, resolveAdaptiveDifficulty, type DifficultyLevel, type FeedbackSummary } from '@/lib/analytics';
 
@@ -133,6 +134,13 @@ export default function StudentQuizCenter() {
     setIsSubmitted(false);
   };
 
+  // Warm the generation + grading functions while the student picks
+  // material, so the first real request never pays the cold-start cost.
+  useEffect(() => {
+    fetch('/api/student/quiz').catch(() => undefined);
+    fetch('/api/student/evaluate').catch(() => undefined);
+  }, []);
+
   const handleGenerate = async () => {
     const hasTextMaterial = Boolean(seedMaterial?.text || selection?.chunks.length);
     const hasMedia = !seedMaterial && Boolean(selection?.media);
@@ -194,8 +202,7 @@ export default function StudentQuizCenter() {
         throw new Error('No material selected.');
       }
 
-      const response = await fetch('/api/student/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      const result = await parseApiResponse<StudentQuizGenerationOutput>(response);
+      const result = await fetchJsonWithRetry<StudentQuizGenerationOutput>('/api/student/quiz', body);
       const generatedId = makeId('student-quiz');
       const topic = primaryTopic || result.quizTitle;
       setQuizId(generatedId);
@@ -246,16 +253,11 @@ export default function StudentQuizCenter() {
     // a correct idea in the student's own words counts as correct.
     setGrading(true);
     try {
-      const response = await fetch('/api/student/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: currentQuestion.questionText,
-          referenceAnswer: currentQuestion.correctAnswer,
-          studentAnswer: answer,
-        }),
+      const result = await fetchJsonWithRetry<{ verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }>('/api/student/evaluate', {
+        question: currentQuestion.questionText,
+        referenceAnswer: currentQuestion.correctAnswer,
+        studentAnswer: answer,
       });
-      const result = await parseApiResponse<{ verdict: 'correct' | 'partial' | 'incorrect'; feedback: string }>(response);
       setEvaluations((prev) => ({ ...prev, [activeQuestion]: result }));
       setScore((prev) => prev + (result.verdict === 'correct' ? 1 : result.verdict === 'partial' ? 0.5 : 0));
     } catch {
@@ -385,6 +387,12 @@ export default function StudentQuizCenter() {
                 <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/25" disabled={loading || (!seedMaterial && !selection?.hasMaterial)} onClick={() => void handleGenerate()}>
                   {loading ? <><Loader2 className="mr-2 size-5 animate-spin" /> Decoding Material...</> : <><Sparkles className="mr-2 size-5" /> Generate Interactive Quiz</>}
                 </Button>
+                {loading && (
+                  <GenerationProgress
+                    title="Generating your quiz"
+                    hint="Reading your material and writing questions. The first generation after a while can take up to a minute."
+                  />
+                )}
               </div>
             </div>
           </Card>

@@ -13,7 +13,7 @@ import { formatDateKey, formatDateLabel, getAttempts, getPlanSetup, getSources, 
 import { useFirebase } from '@/firebase';
 import { deleteTaskFromFirestore, loadAttempts, loadTasks, saveTaskToFirestore } from '@/lib/firestore-store';
 import { getTopicStats } from '@/lib/analytics';
-import { parseApiResponse } from '@/lib/api-response';
+import { fetchJsonWithRetry } from '@/lib/api-response';
 import { StudyPlanDialog } from '@/components/StudyPlanDialog';
 import { cn } from '@/lib/utils';
 
@@ -149,19 +149,14 @@ export default function StudySchedulePlanner() {
         }
       }
 
-      const response = await fetch('/api/student/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          startDate: todayKey,
-          hoursPerDay: setup.hoursPerDay,
-          dayStartTime: setup.dayStartTime,
-          subjects,
-          busyMinutesByDate,
-          note: mode === 'rebalance' ? 'This is a rebalance of an existing plan using the student\'s latest quiz scores. Rebuild the remaining days only.' : undefined,
-        }),
+      const result = await fetchJsonWithRetry<PlanResult>('/api/student/plan', {
+        startDate: todayKey,
+        hoursPerDay: setup.hoursPerDay,
+        dayStartTime: setup.dayStartTime,
+        subjects,
+        busyMinutesByDate,
+        note: mode === 'rebalance' ? 'This is a rebalance of an existing plan using the student\'s latest quiz scores. Rebuild the remaining days only.' : undefined,
       });
-      const result = await parseApiResponse<PlanResult>(response);
 
       // Enforce the plan rules locally as well: valid dates, before the exam,
       // and never beyond the student's daily hours (plus their fixed tasks).

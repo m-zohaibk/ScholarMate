@@ -12,7 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { getNotes, makeId, saveNote, setStudySeed, takeStudySeed, type StoredNote } from '@/lib/study-store';
 import { useFirebase } from '@/firebase';
 import { loadNotes, saveNoteToFirestore } from '@/lib/firestore-store';
-import { parseApiResponse } from '@/lib/api-response';
+import { fetchJsonWithRetry } from '@/lib/api-response';
+import { GenerationProgress } from '@/components/GenerationProgress';
 import { SourcePicker, type SourceSelection } from '@/components/SourcePicker';
 import { chunksForText, type StudyChunk } from '@/lib/source-inspect';
 
@@ -82,20 +83,29 @@ export default function StudentNotesGenerator() {
     }
   }, [toast]);
 
+  // Warm the generation function while the student picks material, so the
+  // first Generate click never pays the cold-start cost.
+  useEffect(() => {
+    fetch('/api/student/notes').catch(() => undefined);
+  }, []);
+
   const handleSelectionChange = useCallback((next: SourceSelection | null) => {
     setSelection(next);
   }, []);
 
   const requestChunkNotes = async (chunk: StudyChunk): Promise<StudentStructuredNotesOutput> => {
-    const body = JSON.stringify({
-      studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
-      fileName: chunk.sourceName,
-      detailLevel: 'detailed',
-      keywordsToFocus: [chunk.label],
-      studyMaterialText: chunk.text,
-    });
-    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-    return parseApiResponse<StudentStructuredNotesOutput>(response);
+    // No retry here: generateDetailedFromChunks already retries a failed part once.
+    return fetchJsonWithRetry<StudentStructuredNotesOutput>(
+      '/api/student/notes',
+      {
+        studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
+        fileName: chunk.sourceName,
+        detailLevel: 'detailed',
+        keywordsToFocus: [chunk.label],
+        studyMaterialText: chunk.text,
+      },
+      { retries: 0 }
+    );
   };
 
   /** Detailed-complete generation: one call per part, then the parts are joined as-is. */
@@ -130,21 +140,19 @@ export default function StudentNotesGenerator() {
   };
 
   const generateSummaryFromText = async (text: string, fileName: string) => {
-    const body = JSON.stringify({
+    return fetchJsonWithRetry<StudentStructuredNotesOutput>('/api/student/notes', {
       studyMaterialDataUri: TEXT_PLACEHOLDER_URI,
       fileName,
       detailLevel: 'summary',
       studyMaterialText: text.slice(0, 48000),
     });
-    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-    return parseApiResponse<StudentStructuredNotesOutput>(response);
   };
 
   const generateFromMedia = async () => {
     const media = selection?.media;
     if (!media) throw new Error('No document selected.');
     const preparedPdf = media.geminiFileUri || (media.pdfText || media.pdfPageImages.length ? TEXT_PLACEHOLDER_URI : media.fileData);
-    const body = JSON.stringify({
+    return fetchJsonWithRetry<StudentStructuredNotesOutput>('/api/student/notes', {
       studyMaterialDataUri: preparedPdf,
       fileName: media.fileName,
       mimeType: media.fileName?.endsWith('.docx')
@@ -156,8 +164,6 @@ export default function StudentNotesGenerator() {
       studyMaterialText: media.pdfText || undefined,
       pdfPageImages: media.pdfText.length <= 40 ? media.pdfPageImages : undefined,
     });
-    const response = await fetch('/api/student/notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
-    return parseApiResponse<StudentStructuredNotesOutput>(response);
   };
 
   const handleGenerate = async () => {
@@ -288,10 +294,13 @@ export default function StudentNotesGenerator() {
               <Button className="h-12 w-full rounded-2xl text-base font-semibold shadow-lg shadow-accent/25" disabled={loading || !canGenerate} onClick={() => void handleGenerate()}>
                 {loading ? <><Loader2 className="mr-2 size-5 animate-spin" />{progress ? `Generating part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…` : 'Analyzing Document...'}</> : <><Sparkles className="mr-2 size-5" />Generate Notes</>}
               </Button>
-              {loading && progress && progress.total > 1 && (
-                <p className="text-center text-xs text-muted-foreground">
-                  {progress.done} of {progress.total} parts complete{progress.label ? ` — now: ${progress.label}` : ''}
-                </p>
+              {loading && (
+                <GenerationProgress
+                  title={progress && progress.total > 1 ? `Generating part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}` : 'Generating your notes'}
+                  hint={progress && progress.total > 1
+                    ? `${progress.done} of ${progress.total} parts complete${progress.label ? ` — now: ${progress.label}` : ''}. Finished parts are kept, even if one needs another try.`
+                    : 'Reading your material and writing structured notes. The first generation after a while can take up to a minute.'}
+                />
               )}
             </CardContent>
           </Card>

@@ -4,6 +4,14 @@ import { DocumentInputError, normalizeDocument } from '@/lib/document-extractor'
 import { ocrRenderedPdfPages } from '@/lib/scanned-pdf-ocr';
 import { getGoogleAiConfigurationError } from '@/lib/google-ai-config';
 
+/** Generation can legitimately take a while — never let the platform cut it short. */
+export const maxDuration = 60;
+
+/** Warm-up ping: the notes page calls this on open so the first real generation never pays the cold-start cost. */
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 function isGeminiPdfUri(value: unknown): value is string {
   return typeof value === 'string' && /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-z0-9-]+$/i.test(value);
 }

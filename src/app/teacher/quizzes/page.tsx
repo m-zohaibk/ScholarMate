@@ -16,6 +16,7 @@ import { useFirebase } from '@/firebase';
 import { loadAttemptStats, loadPersonalQuizzes, savePublishedQuizToFirestore, saveQuizToFirestore, type AttemptStat } from '@/lib/firestore-store';
 import { cn } from '@/lib/utils';
 import { uploadPdfForGemini } from '@/lib/gemini-file-client';
+import { fetchJsonWithRetry } from '@/lib/api-response';
 
 export default function TeacherQuizGenerator() {
   const { toast } = useToast();
@@ -142,10 +143,7 @@ export default function TeacherQuizGenerator() {
     setNumQuestions(count);
     setLoading(true);
     try {
-      const response = await fetch('/api/teacher/quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syllabusOrTopics: input || 'Generate from the attached PDF document.', syllabusFileUri: syllabusFileUri || undefined, difficulty, numQuestions: count, questionTypes: ['MCQ', 'conceptual', 'short-answer'], includeKeywords: includeTags }) });
-      const errorPayload = await response.clone().json().catch(() => ({})) as { error?: string };
-      if (!response.ok) throw new Error(errorPayload.error || 'quiz-generation-failed');
-      const result = await response.json() as GenerateTeacherQuizOutput;
+      const result = await fetchJsonWithRetry<GenerateTeacherQuizOutput>('/api/teacher/quiz', { syllabusOrTopics: input || 'Generate from the attached PDF document.', syllabusFileUri: syllabusFileUri || undefined, difficulty, numQuestions: count, questionTypes: ['MCQ', 'conceptual', 'short-answer'], includeKeywords: includeTags });
       const id = makeId('teacher-quiz');
       setQuizId(id);
       setPublished(false);
