@@ -50,15 +50,16 @@ const NAV = {
 function BrandBlock() {
   return (
     <Link href="/" className="flex items-center gap-3">
-      <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/30">
-        <Sparkles className="size-5" />
+      <span className="relative grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/30 ring-1 ring-white/40">
+        <GraduationCap className="size-5" />
+        <span className="absolute -right-1 -top-1 grid size-4 place-items-center rounded-full bg-white text-accent shadow"><Sparkles className="size-2.5" /></span>
       </span>
       <span className="leading-tight">
         <span className="block font-headline text-[17px] font-bold tracking-tight text-white">
           ScholarMate
         </span>
         <span className="block text-[11px] font-medium uppercase tracking-[0.18em] text-white/60">
-          AI Academic Hub
+          Smart Academic Assistant
         </span>
       </span>
     </Link>
@@ -192,8 +193,9 @@ export function AppShell({ role, children }: AppShellProps) {
             </SheetContent>
           </Sheet>
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md shadow-primary/25">
-              <Sparkles className="size-4" />
+            <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md shadow-primary/25 ring-1 ring-white/40">
+              <GraduationCap className="size-5" />
+              <span className="absolute -right-1 -top-1 grid size-3.5 place-items-center rounded-full bg-white text-accent shadow"><Sparkles className="size-2" /></span>
             </span>
             <span className="font-headline text-lg font-bold tracking-tight">
               Scholar<span className="text-gradient">Mate</span>

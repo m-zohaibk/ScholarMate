@@ -4,22 +4,20 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useFirebase } from '@/firebase';
 import { describeAuthError, getUserProfile, portalPathForRole, saveUserProfile, type UserProfile, type UserRole } from '@/lib/auth-profile';
 import { RolePicker } from '@/components/RolePicker';
+import { AuthLayout, BrandLockup, GoogleGlyph } from '@/components/AuthLayout';
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4">
-      <span className="grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/25">
-        <Sparkles className="size-6" />
-      </span>
-      <p className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#eef3fa] px-4">
+      <BrandLockup dark centered />
+      <p className="flex items-center gap-2 text-sm font-medium text-slate-500">
         <Loader2 className="size-4 animate-spin" /> {label}
       </p>
     </div>
@@ -116,75 +114,62 @@ export default function LoginPage() {
   if (user && profile) return <LoadingScreen label="Opening your workspace..." />;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/25">
-            <Sparkles className="size-5" />
-          </span>
-          <span className="font-headline text-2xl font-bold tracking-tight">
-            Scholar<span className="text-gradient">Mate</span>
-          </span>
-        </Link>
+    <AuthLayout>
+      {user && profile === null ? (
+        <div className="space-y-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary">Almost there</p>
+            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e]">One last step</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-500">You are signed in as {user.email}. Tell us who you are so your records land in the right workspace.</p>
+          </div>
+          <div className="space-y-2">
+            <Label>I am a</Label>
+            <RolePicker value={roleChoice} onChange={setRoleChoice} />
+          </div>
+          {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
+          <Button className="h-12 w-full rounded-2xl bg-gradient-to-r from-[#257edc] to-[#5e4ce6] text-base font-semibold shadow-lg shadow-[#5e4ce6]/25 transition-opacity hover:opacity-95" disabled={savingRole} onClick={() => void completeProfile()}>
+            {savingRole ? <><Loader2 className="mr-2 size-5 animate-spin" /> Setting up...</> : 'Continue to my workspace'}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary">Welcome back</p>
+            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e]">Log in to ScholarMate</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-500">Pick up your notes, quizzes, scores, and study plan where you left off.</p>
+          </div>
 
-        <Card className="overflow-hidden border-border/60 shadow-xl shadow-primary/5">
-          <CardContent className="space-y-5 p-6 sm:p-8">
-            {user && profile === null ? (
-              <>
-                <div className="text-center">
-                  <h1 className="font-headline text-2xl font-bold tracking-tight">One last step</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">You are signed in as {user.email}. Tell us who you are so your records land in the right workspace.</p>
-                </div>
-                <div className="space-y-2">
-                  <Label>I am a</Label>
-                  <RolePicker value={roleChoice} onChange={setRoleChoice} />
-                </div>
-                {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
-                <Button className="h-12 w-full rounded-2xl text-base font-semibold" disabled={savingRole} onClick={() => void completeProfile()}>
-                  {savingRole ? <><Loader2 className="mr-2 size-5 animate-spin" /> Setting up...</> : 'Continue to my workspace'}
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="text-center">
-                  <h1 className="font-headline text-2xl font-bold tracking-tight">Welcome back</h1>
-                  <p className="mt-1 text-sm text-muted-foreground">Log in to pick up your notes, quizzes, scores, and study plan.</p>
-                </div>
+          <form className="space-y-4" onSubmit={handleEmailLogin}>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">Email</Label>
+              <Input id="login-email" type="email" className="h-11 rounded-2xl" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Password</Label>
+              <Input id="login-password" type="password" className="h-11 rounded-2xl" placeholder="Your password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+            </div>
 
-                <form className="space-y-4" onSubmit={handleEmailLogin}>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input id="login-email" type="email" className="h-11 rounded-2xl" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="login-password">Password</Label>
-                    <Input id="login-password" type="password" className="h-11 rounded-2xl" placeholder="Your password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
-                  </div>
+            {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
 
-                  {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
+            <Button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-r from-[#257edc] to-[#5e4ce6] text-base font-semibold shadow-lg shadow-[#5e4ce6]/25 transition-opacity hover:opacity-95" disabled={busy}>
+              {busy ? <><Loader2 className="mr-2 size-5 animate-spin" /> Logging in...</> : 'Log in'}
+            </Button>
+          </form>
 
-                  <Button type="submit" className="h-12 w-full rounded-2xl text-base font-semibold" disabled={busy}>
-                    {busy ? <><Loader2 className="mr-2 size-5 animate-spin" /> Logging in...</> : 'Log in'}
-                  </Button>
-                </form>
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+          </div>
 
-                <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-                </div>
+          <Button type="button" variant="outline" className="h-12 w-full rounded-2xl border-slate-300 font-semibold text-slate-700 hover:bg-slate-50" disabled={busy} onClick={() => void handleGoogle()}>
+            <GoogleGlyph className="mr-2.5 size-5" /> Continue with Google
+          </Button>
 
-                <Button type="button" variant="outline" className="h-12 w-full rounded-2xl font-semibold" disabled={busy} onClick={() => void handleGoogle()}>
-                  Continue with Google
-                </Button>
-
-                <p className="text-center text-sm text-muted-foreground">
-                  New to ScholarMate?{' '}
-                  <Link href="/register" className="font-semibold text-primary hover:underline">Create an account</Link>
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <p className="text-center text-sm text-slate-500">
+            New to ScholarMate?{' '}
+            <Link href="/register" className="font-semibold text-primary hover:underline">Create an account</Link>
+          </p>
+        </div>
+      )}
+    </AuthLayout>
   );
 }

@@ -76,8 +76,9 @@ export default function Home() {
       <header className="sticky top-0 z-50 border-b border-border/60 bg-background/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md shadow-primary/25">
-              <Sparkles className="size-4" />
+            <span className="relative grid size-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-white shadow-md shadow-primary/25 ring-1 ring-white/40">
+              <GraduationCap className="size-5" />
+              <span className="absolute -right-1 -top-1 grid size-3.5 place-items-center rounded-full bg-white text-accent shadow"><Sparkles className="size-2" /></span>
             </span>
             <span className="font-headline text-xl font-bold tracking-tight">
               Scholar<span className="text-gradient">Mate</span>
@@ -297,8 +298,9 @@ export default function Home() {
       <footer className="border-t border-border/60 bg-white/70">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 py-10 sm:px-6 md:flex-row">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent text-white">
-              <Sparkles className="size-4" />
+            <span className="relative grid size-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent text-white ring-1 ring-white/40">
+              <GraduationCap className="size-4" />
+              <span className="absolute -right-1 -top-1 grid size-3 place-items-center rounded-full bg-white text-accent shadow"><Sparkles className="size-1.5" /></span>
             </span>
             <span className="font-headline text-lg font-bold">Scholar<span className="text-gradient">Mate</span></span>
           </Link>

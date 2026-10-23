@@ -44,6 +44,8 @@ export function describeAuthError(error: unknown): string {
       return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/operation-not-allowed':
       return 'This sign-in method is not enabled for the app yet. Please contact the administrator.';
+    case 'auth/unauthorized-domain':
+      return "This website's domain is not authorized for sign-in yet. Please contact the administrator.";
     case 'auth/popup-closed-by-user':
     case 'auth/cancelled-popup-request':
       return 'Sign-in was cancelled.';

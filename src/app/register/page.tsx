@@ -4,14 +4,14 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useFirebase } from '@/firebase';
 import { describeAuthError, getUserProfile, portalPathForRole, saveUserProfile, type UserRole } from '@/lib/auth-profile';
 import { RolePicker } from '@/components/RolePicker';
+import { AuthLayout, GoogleGlyph } from '@/components/AuthLayout';
 
 function RegisterForm() {
   const { auth, firestore } = useFirebase();
@@ -77,66 +77,54 @@ function RegisterForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-2.5">
-          <span className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-lg shadow-primary/25">
-            <Sparkles className="size-5" />
-          </span>
-          <span className="font-headline text-2xl font-bold tracking-tight">
-            Scholar<span className="text-gradient">Mate</span>
-          </span>
-        </Link>
+    <AuthLayout>
+      <div className="space-y-5">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary">Join ScholarMate</p>
+          <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e]">Create your account</h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">Your notes, quizzes, scores, and study plan stay saved under your account.</p>
+        </div>
 
-        <Card className="overflow-hidden border-border/60 shadow-xl shadow-primary/5">
-          <CardContent className="space-y-5 p-6 sm:p-8">
-            <div className="text-center">
-              <h1 className="font-headline text-2xl font-bold tracking-tight">Create your account</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Your notes, quizzes, scores, and plans stay saved under your account.</p>
-            </div>
+        <div className="space-y-2">
+          <Label>I am registering as a</Label>
+          <RolePicker value={role} onChange={setRole} />
+        </div>
 
-            <div className="space-y-2">
-              <Label>I am registering as a</Label>
-              <RolePicker value={role} onChange={setRole} />
-            </div>
+        <form className="space-y-4" onSubmit={handleEmailSignUp}>
+          <div className="space-y-1.5">
+            <Label htmlFor="register-name">Full name</Label>
+            <Input id="register-name" className="h-11 rounded-2xl" placeholder="e.g. Muhammad Zohaib" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="register-email">Email</Label>
+            <Input id="register-email" type="email" className="h-11 rounded-2xl" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="register-password">Password</Label>
+            <Input id="register-password" type="password" className="h-11 rounded-2xl" placeholder="At least 6 characters" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
+          </div>
 
-            <form className="space-y-4" onSubmit={handleEmailSignUp}>
-              <div className="space-y-1.5">
-                <Label htmlFor="register-name">Full name</Label>
-                <Input id="register-name" className="h-11 rounded-2xl" placeholder="e.g. Muhammad Zohaib" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="register-email">Email</Label>
-                <Input id="register-email" type="email" className="h-11 rounded-2xl" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="register-password">Password</Label>
-                <Input id="register-password" type="password" className="h-11 rounded-2xl" placeholder="At least 6 characters" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
-              </div>
+          {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
 
-              {error && <p className="rounded-xl bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-600">{error}</p>}
+          <Button type="submit" className="h-12 w-full rounded-2xl bg-gradient-to-r from-[#257edc] to-[#5e4ce6] text-base font-semibold shadow-lg shadow-[#5e4ce6]/25 transition-opacity hover:opacity-95" disabled={busy}>
+            {busy ? <><Loader2 className="mr-2 size-5 animate-spin" /> Creating account...</> : `Create ${role} account`}
+          </Button>
+        </form>
 
-              <Button type="submit" className="h-12 w-full rounded-2xl text-base font-semibold" disabled={busy}>
-                {busy ? <><Loader2 className="mr-2 size-5 animate-spin" /> Creating account...</> : `Create ${role} account`}
-              </Button>
-            </form>
+        <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+        </div>
 
-            <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-            </div>
+        <Button type="button" variant="outline" className="h-12 w-full rounded-2xl border-slate-300 font-semibold text-slate-700 hover:bg-slate-50" disabled={busy} onClick={() => void handleGoogle()}>
+          <GoogleGlyph className="mr-2.5 size-5" /> Continue with Google
+        </Button>
 
-            <Button type="button" variant="outline" className="h-12 w-full rounded-2xl font-semibold" disabled={busy} onClick={() => void handleGoogle()}>
-              Continue with Google
-            </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/login" className="font-semibold text-primary hover:underline">Log in</Link>
-            </p>
-          </CardContent>
-        </Card>
+        <p className="text-center text-sm text-slate-500">
+          Already have an account?{' '}
+          <Link href="/login" className="font-semibold text-primary hover:underline">Log in</Link>
+        </p>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 
