@@ -44,14 +44,14 @@ function ExplainSimplyButton({ question, correctAnswer, explanation }: { questio
 
   if (simple) {
     return (
-      <div className="mt-3 rounded-xl bg-white/70 p-3.5 text-sm leading-relaxed text-foreground">
+      <div className="mt-3 rounded-xl bg-card/70 p-3.5 text-sm leading-relaxed text-foreground">
         <p className="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Lightbulb className="size-3.5" /> In simple words</p>
         {simple}
       </div>
     );
   }
   return (
-    <Button variant="outline" size="sm" className="mt-3 rounded-xl bg-white/60" disabled={busy} onClick={() => void run()}>
+    <Button variant="outline" size="sm" className="mt-3 rounded-xl bg-card/60" disabled={busy} onClick={() => void run()}>
       {busy ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Lightbulb className="mr-1.5 size-3.5" />}
       Explain simply
     </Button>
@@ -330,7 +330,7 @@ export default function StudentQuizCenter() {
           <Card className="overflow-hidden border-border/60">
             <div className="grid md:grid-cols-3">
               <div className="flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 p-7 text-center sm:p-8">
-                <span className="grid size-16 place-items-center rounded-3xl bg-white text-primary shadow-lg shadow-primary/15"><BookOpen className="size-8" /></span>
+                <span className="grid size-16 place-items-center rounded-3xl bg-card text-primary shadow-lg shadow-primary/15"><BookOpen className="size-8" /></span>
                 <h3 className="mt-4 font-headline text-xl font-bold">Smart Analysis</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Supports PDFs, printed text, handwriting OCR, DOCX, and PPTX files.</p>
               </div>
@@ -449,7 +449,7 @@ export default function StudentQuizCenter() {
                   <div className="space-y-3">
                     <p className="text-sm font-semibold">What to revise — your missed questions:</p>
                     {lastSummary.missed.map((missed) => (
-                      <div key={missed.index} className="rounded-2xl border border-border/60 bg-white/60 p-4">
+                      <div key={missed.index} className="rounded-2xl border border-border/60 bg-card/60 p-4">
                         <p className="text-sm font-medium leading-relaxed">Q{missed.index + 1}. {missed.questionText}</p>
                         <p className="mt-1.5 text-sm text-muted-foreground">Correct answer: <span className="font-medium text-foreground">{missed.correctAnswer}</span></p>
                         {missed.explanation && (
@@ -479,7 +479,7 @@ export default function StudentQuizCenter() {
               <p className="mb-1 truncate text-xs font-bold uppercase tracking-[0.14em] text-primary">{quiz.quizTitle}</p>
               <h2 className="font-headline text-xl font-bold">Question {activeQuestion + 1} of {quiz.questions.length}</h2>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-white/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">
               <Sparkles className="size-3.5 text-accent" /> Vision AI Powered
             </span>
           </div>

@@ -89,7 +89,7 @@ export default function TeacherDashboard() {
                   <Link
                     key={quiz.id}
                     href="/teacher/quizzes"
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-white/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-4"
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md sm:p-4"
                   >
                     <div className="flex min-w-0 items-center gap-3.5">
                       <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
@@ -123,10 +123,10 @@ export default function TeacherDashboard() {
             <CardDescription>Jump straight into the assessment workflow.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3.5">
-            <Button variant="outline" className="card-lift h-28 flex-col gap-2.5 rounded-3xl border-border/60 bg-white/60 text-sm font-semibold" asChild>
+            <Button variant="outline" className="card-lift h-28 flex-col gap-2.5 rounded-3xl border-border/60 bg-card/60 text-sm font-semibold" asChild>
               <Link href="/teacher/quizzes"><PenTool className="size-6 text-primary" /> Create Assessment</Link>
             </Button>
-            <Button variant="outline" className="card-lift h-28 flex-col gap-2.5 rounded-3xl border-border/60 bg-white/60 text-sm font-semibold" asChild>
+            <Button variant="outline" className="card-lift h-28 flex-col gap-2.5 rounded-3xl border-border/60 bg-card/60 text-sm font-semibold" asChild>
               <Link href="/teacher/quizzes#published"><History className="size-6 text-accent" /> Published Content</Link>
             </Button>
             <Button variant="outline" className="card-lift col-span-2 h-20 flex-row gap-2.5 rounded-3xl border-primary/20 bg-primary/5 text-sm font-semibold text-primary hover:bg-primary/10" asChild>

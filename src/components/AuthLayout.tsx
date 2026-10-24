@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BookOpen, GraduationCap, PenTool, Sparkles, Target } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const FEATURES = [
   { icon: BookOpen, title: 'Structured notes', text: 'Complete notes generated from your own material, part by part.' },
@@ -20,10 +21,10 @@ export function BrandLockup({ dark = false, centered = false }: { dark?: boolean
         </span>
       </span>
       <span className="leading-none">
-        <span className={`block font-headline text-[22px] font-bold tracking-tight ${dark ? 'text-[#0d1b3e]' : 'text-white'}`}>
+        <span className={`block font-headline text-[22px] font-bold tracking-tight ${dark ? 'text-[#0d1b3e] dark:text-white' : 'text-white'}`}>
           Scholar<span className="bg-gradient-to-r from-[#6db3ff] to-[#b7a8ff] bg-clip-text text-transparent">Mate</span>
         </span>
-        <span className={`mt-1 block text-[11px] font-semibold uppercase tracking-[0.24em] ${dark ? 'text-slate-600' : 'text-white/60'}`}>
+        <span className={`mt-1 block text-[11px] font-semibold uppercase tracking-[0.24em] ${dark ? 'text-slate-600 dark:text-white/60' : 'text-white/60'}`}>
           Smart Academic Assistant
         </span>
       </span>
@@ -38,7 +39,10 @@ export function BrandLockup({ dark = false, centered = false }: { dark?: boolean
  */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen w-full bg-[#eef3fa]">
+    <div className="relative flex min-h-screen w-full bg-[#eef3fa] dark:bg-background">
+      <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">
+        <ThemeToggle />
+      </div>
       {/* Brand panel (desktop) */}
       <aside className="relative hidden w-[44%] overflow-hidden lg:flex xl:w-[40%]">
         <div className="absolute inset-0 bg-[linear-gradient(165deg,#081228_0%,#0d1b3e_38%,#1a3f9e_78%,#5e4ce6_125%)]" />
@@ -87,10 +91,10 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
           <div className="mb-7 lg:hidden">
             <BrandLockup dark centered />
           </div>
-          <div className="rounded-[26px] border border-[#dbe5f3] bg-white p-6 shadow-[0_24px_60px_-24px_rgba(13,27,62,0.28)] sm:p-8">
+          <div className="rounded-[26px] border border-[#dbe5f3] bg-white p-6 shadow-[0_24px_60px_-24px_rgba(13,27,62,0.28)] dark:border-border dark:bg-card sm:p-8">
             {children}
           </div>
-          <p className="mt-5 text-center text-xs text-slate-600">
+          <p className="mt-5 text-center text-xs text-slate-600 dark:text-muted-foreground">
             Protected accounts · Your records stay private to you
           </p>
         </div>

@@ -235,7 +235,7 @@ export default function StudySchedulePlanner() {
         </div>
         <div className="flex flex-col gap-2.5 sm:flex-row">
           {planSetup?.planTitle && (
-            <Button variant="outline" className="rounded-2xl bg-white/70" disabled={generatingPlan} onClick={() => void buildPlan(planSetup, 'rebalance')}>
+            <Button variant="outline" className="rounded-2xl bg-card/70" disabled={generatingPlan} onClick={() => void buildPlan(planSetup, 'rebalance')}>
               {generatingPlan ? <Loader2 className="mr-2 size-4 animate-spin" /> : <RefreshCw className="mr-2 size-4" />} Rebalance plan
             </Button>
           )}
@@ -258,7 +258,7 @@ export default function StudySchedulePlanner() {
               </p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button variant="outline" size="sm" className="rounded-xl bg-white/70" onClick={removePlanSessions}>
+              <Button variant="outline" size="sm" className="rounded-xl bg-card/70" onClick={removePlanSessions}>
                 <Trash2 className="mr-1.5 size-3.5" /> Remove sessions
               </Button>
               <Button variant="ghost" size="icon" className="size-9 rounded-xl" aria-label="Dismiss plan summary" onClick={() => setBannerDismissed(true)}>
@@ -311,7 +311,7 @@ export default function StudySchedulePlanner() {
 
         <div className="lg:col-span-8">
           <Card className="overflow-hidden border-border/60">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-white/50 pb-4">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 bg-card/50 pb-4">
               <div className="min-w-0">
                 <CardTitle className="truncate font-headline text-lg">Schedule for {formatDateLabel(date)}</CardTitle>
                 <CardDescription>Keep each session short, focused, and actionable.</CardDescription>

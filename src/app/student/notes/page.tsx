@@ -107,14 +107,14 @@ function PointText({ text }: { text: string }) {
     <span>
       {segments.map((segment, index) => {
         if (index % 2 === 1) {
-          return <strong key={index} className="font-semibold text-slate-800">{segment}</strong>;
+          return <strong key={index} className="font-semibold text-foreground">{segment}</strong>;
         }
         if (index === 0 && !hasMarkdownBold) {
           const lead = segment.match(/^([^:.;]{2,60}):\s+([\s\S]*)$/);
           if (lead) {
             return (
               <span key={index}>
-                <strong className="font-semibold text-slate-800">{lead[1]}:</strong> {lead[2]}
+                <strong className="font-semibold text-foreground">{lead[1]}:</strong> {lead[2]}
               </span>
             );
           }
@@ -131,7 +131,7 @@ function NoteSections({ sections }: { sections: NoteSection[] }) {
     <div className="space-y-9">
       {sections.map((section, sectionIndex) => (
         <section key={section.heading} className="animate-in fade-in slide-in-from-bottom-2 space-y-4 duration-500">
-          <h3 className="flex items-center gap-3 font-headline text-[22px] font-bold leading-snug tracking-tight text-slate-900">
+          <h3 className="flex items-center gap-3 font-headline text-[22px] font-bold leading-snug tracking-tight text-foreground">
             <span className="h-7 w-1.5 shrink-0 rounded-full bg-gradient-to-b from-primary to-accent" />
             <span className="font-headline text-sm font-bold tracking-widest text-primary/50">{String(sectionIndex + 1).padStart(2, '0')}</span>
             {section.heading}
@@ -140,7 +140,7 @@ function NoteSections({ sections }: { sections: NoteSection[] }) {
             {section.subsections.map((subsection, subsectionIndex) => (
               <Card
                 key={subsection.subheading}
-                className="animate-in fade-in slide-in-from-bottom-1 border-border/60 bg-white/80 duration-500"
+                className="animate-in fade-in slide-in-from-bottom-1 border-border/60 bg-card/80 duration-500"
                 style={{ animationDelay: `${Math.min(subsectionIndex * 90, 450)}ms` }}
               >
                 <CardHeader className="px-5 pb-2.5 pt-5 sm:px-6">
@@ -151,7 +151,7 @@ function NoteSections({ sections }: { sections: NoteSection[] }) {
                     {subsection.points.map((point, pointIndex) => (
                       <li
                         key={point}
-                        className="animate-in fade-in flex gap-3 text-[15px] leading-7 text-slate-600 duration-500"
+                        className="animate-in fade-in flex gap-3 text-[15px] leading-7 text-muted-foreground duration-500"
                         style={{ animationDelay: `${Math.min(pointIndex * 60, 360)}ms` }}
                       >
                         <span className="mt-[10px] size-2 shrink-0 rounded-full bg-gradient-to-br from-primary to-accent" />
@@ -567,7 +567,7 @@ export default function StudentNotesGenerator() {
               ) : null}
             </div>
           ) : !notes ? (
-            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-white/40 p-8 text-center sm:min-h-[500px]">
+            <div className="flex h-full min-h-[420px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-border bg-card/40 p-8 text-center sm:min-h-[500px]">
               <span className="grid size-20 place-items-center rounded-3xl bg-gradient-to-br from-primary/10 to-accent/10"><ListTree className="size-9 text-primary" /></span>
               <h3 className="mt-5 font-headline text-xl font-bold">No Notes Yet</h3>
               <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">Add your documents, pick the chapters you need, and generate structured notes.</p>

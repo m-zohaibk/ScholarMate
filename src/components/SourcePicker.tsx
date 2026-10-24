@@ -313,7 +313,7 @@ export function SourcePicker({ onChange, initialSourceId, initialTopicTitle }: S
                 key={item.id}
                 type="button"
                 onClick={() => addInspectedSource({ ...item, inspectedAt: new Date().toISOString() })}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-white/70 px-3 py-1.5 text-xs font-medium transition-all hover:border-primary/40 hover:text-primary"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/70 px-3 py-1.5 text-xs font-medium transition-all hover:border-primary/40 hover:text-primary"
               >
                 <Plus className="size-3.5" /> {item.name}
               </button>
@@ -325,7 +325,7 @@ export function SourcePicker({ onChange, initialSourceId, initialTopicTitle }: S
       {sources.map((source) => {
         const choice = choices[source.id] || defaultChoice(source);
         return (
-          <div key={source.id} className="space-y-3 rounded-2xl border border-border/60 bg-white/60 p-4">
+          <div key={source.id} className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="flex items-center gap-2 truncate text-sm font-semibold">
@@ -455,7 +455,7 @@ export function SourcePicker({ onChange, initialSourceId, initialTopicTitle }: S
       })}
 
       {media && (
-        <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-white/60 p-4">
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-4">
           <div className="min-w-0">
             <p className="flex items-center gap-2 truncate text-sm font-semibold">
               <FileText className="size-4 shrink-0 text-primary" /> {media.fileName}

@@ -138,7 +138,7 @@ export default function StudentDashboard() {
                   <Link
                     href={activity.href}
                     key={activity.id}
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-white/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/60 p-3.5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:p-4"
                   >
                     <div className="flex min-w-0 items-center gap-3.5">
                       <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
@@ -190,7 +190,7 @@ export default function StudentDashboard() {
                 <span className="text-[13px] font-bold">Study Plan</span>
               </div>
               <p className="truncate text-sm font-medium">{tasks.find((task) => !task.completed)?.title || 'Add a task to your schedule.'}</p>
-              <Button size="sm" variant="outline" className="w-full rounded-xl bg-white/70" asChild>
+              <Button size="sm" variant="outline" className="w-full rounded-xl bg-card/70" asChild>
                 <Link href="/student/schedule">View Schedule</Link>
               </Button>
             </div>
@@ -213,7 +213,7 @@ export default function StudentDashboard() {
                 ) : (
                   <>
                     <p className="text-sm font-medium leading-relaxed">No weak areas detected yet. Finish a quiz and your gaps will be mapped automatically.</p>
-                    <Button size="sm" variant="outline" className="w-full rounded-xl bg-white/70" asChild>
+                    <Button size="sm" variant="outline" className="w-full rounded-xl bg-card/70" asChild>
                       <Link href="/student/weak-areas">View Weak Areas</Link>
                     </Button>
                   </>

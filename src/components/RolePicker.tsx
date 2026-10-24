@@ -25,7 +25,7 @@ export function RolePicker({ value, onChange }: { value: UserRole; onChange: (ro
               'rounded-2xl border-2 p-4 text-left transition-all',
               selected
                 ? 'border-primary bg-primary/[0.06] shadow-sm'
-                : 'border-border/70 bg-white/60 hover:border-primary/40'
+                : 'border-border/70 bg-card/60 hover:border-primary/40'
             )}
           >
             <span className={cn('grid size-10 place-items-center rounded-xl', selected ? 'bg-primary text-white' : 'bg-muted text-muted-foreground')}>

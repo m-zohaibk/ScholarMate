@@ -27,6 +27,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface AppShellProps {
   role: 'teacher' | 'student';
@@ -155,6 +156,7 @@ function SidebarBody({ role, onNavigate }: { role: 'teacher' | 'student'; onNavi
         >
           <Home className="size-5 shrink-0 text-white/60" /> Home
         </Link>
+        <ThemeToggle variant="onDark" withLabel />
         <button
           type="button"
           onClick={() => void handleSignOut()}
@@ -202,7 +204,8 @@ export function AppShell({ role, children }: AppShellProps) {
               Scholar<span className="text-gradient">Mate</span>
             </span>
           </Link>
-          <span className="ml-auto rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
+          <ThemeToggle className="ml-auto" />
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
             {role}
           </span>
         </div>
