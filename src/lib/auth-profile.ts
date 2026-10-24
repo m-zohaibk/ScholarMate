@@ -20,6 +20,67 @@ export async function saveUserProfile(firestore: Firestore, profile: UserProfile
   await setDoc(doc(firestore, 'userProfiles', profile.id), profile, { merge: true });
 }
 
+const PENDING_ROLE_KEY = 'scholarmate.pendingRole';
+
+/**
+ * The role chosen on the register page is remembered in the tab session,
+ * so it survives the trip through Google sign-in — or a detour via the
+ * login page — and is applied to the account the moment its profile is
+ * created. Once a profile exists, the question is never asked again.
+ */
+export function stashPendingRole(role: UserRole) {
+  try {
+    window.sessionStorage.setItem(PENDING_ROLE_KEY, role);
+  } catch {
+    // Session storage unavailable — the in-page flows still carry the role.
+  }
+}
+
+export function readPendingRole(): UserRole | null {
+  try {
+    const value = window.sessionStorage.getItem(PENDING_ROLE_KEY);
+    return value === 'student' || value === 'teacher' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingRole() {
+  try {
+    window.sessionStorage.removeItem(PENDING_ROLE_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+/**
+ * Return the signed-in user's profile, creating it first when this
+ * sign-in has none. The role comes from `preferredRole` (the register
+ * page's picker) or the remembered registration choice; with no role
+ * signal at all it returns null and lets the caller ask — once. An
+ * existing profile is returned untouched, never overwritten.
+ */
+export async function ensureUserProfile(
+  firestore: Firestore,
+  user: { uid: string; displayName?: string | null; email?: string | null },
+  preferredRole?: UserRole | null
+): Promise<UserProfile | null> {
+  const existing = await getUserProfile(firestore, user.uid);
+  if (existing) return existing;
+  const role = preferredRole ?? readPendingRole();
+  if (!role) return null;
+  const profile: UserProfile = {
+    id: user.uid,
+    name: user.displayName || user.email?.split('@')[0] || 'User',
+    email: user.email || '',
+    role,
+    createdAt: new Date().toISOString(),
+  };
+  await saveUserProfile(firestore, profile);
+  clearPendingRole();
+  return profile;
+}
+
 export function portalPathForRole(role: UserRole): string {
   return role === 'teacher' ? '/teacher' : '/student';
 }

@@ -9,15 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { useFirebase } from '@/firebase';
-import { describeAuthError, getUserProfile, portalPathForRole, saveUserProfile, type UserProfile, type UserRole } from '@/lib/auth-profile';
+import { clearPendingRole, describeAuthError, ensureUserProfile, getUserProfile, portalPathForRole, saveUserProfile, type UserProfile, type UserRole } from '@/lib/auth-profile';
 import { RolePicker } from '@/components/RolePicker';
 import { AuthLayout, BrandLockup, GoogleGlyph } from '@/components/AuthLayout';
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#eef3fa] px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#eef3fa] px-4 dark:bg-background">
       <BrandLockup dark centered />
-      <p className="flex items-center gap-2 text-sm font-medium text-slate-500">
+      <p className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-muted-foreground">
         <Loader2 className="size-4 animate-spin" /> {label}
       </p>
     </div>
@@ -50,10 +50,24 @@ export default function LoginPage() {
     }
     let cancelled = false;
     getUserProfile(firestore, user.uid)
-      .then((found) => {
+      .then(async (found) => {
         if (cancelled) return;
-        setProfile(found);
-        if (found) router.replace(portalPathForRole(found.role));
+        if (found) {
+          setProfile(found);
+          router.replace(portalPathForRole(found.role));
+          return;
+        }
+        // Signed in but no profile yet. If a role was chosen at
+        // registration, apply it automatically — the question is only
+        // asked when there is genuinely no earlier choice to remember.
+        const healed = await ensureUserProfile(firestore, user).catch(() => null);
+        if (cancelled) return;
+        if (healed) {
+          setProfile(healed);
+          router.replace(portalPathForRole(healed.role));
+          return;
+        }
+        setProfile(null);
       })
       .catch(() => {
         if (!cancelled) setProfile(null);
@@ -101,6 +115,7 @@ export default function LoginPage() {
         createdAt: new Date().toISOString(),
       };
       await saveUserProfile(firestore, profileToSave);
+      clearPendingRole();
       router.replace(portalPathForRole(roleChoice));
     } catch {
       setError('Your account could not be set up. Please try again.');
@@ -119,8 +134,8 @@ export default function LoginPage() {
         <div className="space-y-5">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary">Almost there</p>
-            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e]">One last step</h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-500">You are signed in as {user.email}. Tell us who you are so your records land in the right workspace.</p>
+            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e] dark:text-foreground">One last step</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-muted-foreground">You are signed in as {user.email}. Tell us who you are so your records land in the right workspace.</p>
           </div>
           <div className="space-y-2">
             <Label>I am a</Label>
@@ -135,8 +150,8 @@ export default function LoginPage() {
         <div className="space-y-5">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-primary">Welcome back</p>
-            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e]">Log in to ScholarMate</h1>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-500">Pick up your notes, quizzes, scores, and study plan where you left off.</p>
+            <h1 className="mt-2 font-headline text-[26px] font-bold leading-tight tracking-tight text-[#0d1b3e] dark:text-foreground">Log in to ScholarMate</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-muted-foreground">Pick up your notes, quizzes, scores, and study plan where you left off.</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleEmailLogin}>
@@ -156,15 +171,15 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            <span className="h-px flex-1 bg-slate-200" /> or <span className="h-px flex-1 bg-slate-200" />
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-muted-foreground">
+            <span className="h-px flex-1 bg-slate-200 dark:bg-border" /> or <span className="h-px flex-1 bg-slate-200 dark:bg-border" />
           </div>
 
-          <Button type="button" variant="outline" className="h-12 w-full rounded-2xl border-slate-300 font-semibold text-slate-700 hover:bg-slate-50" disabled={busy} onClick={() => void handleGoogle()}>
+          <Button type="button" variant="outline" className="h-12 w-full rounded-2xl border-slate-300 font-semibold text-slate-700 hover:bg-slate-50 dark:border-border dark:text-foreground dark:hover:bg-secondary" disabled={busy} onClick={() => void handleGoogle()}>
             <GoogleGlyph className="mr-2.5 size-5" /> Continue with Google
           </Button>
 
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm text-slate-500 dark:text-muted-foreground">
             New to ScholarMate?{' '}
             <Link href="/register" className="font-semibold text-primary hover:underline">Create an account</Link>
           </p>
